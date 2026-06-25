@@ -1,0 +1,17 @@
+/* src/index.css */
+
+/* Import Fraunces font for the logo */
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@600&family=Inter:wght@400;500;600&display=swap');
+
+/* Your existing styles... */
+@import "tailwindcss";
+
+/* Custom styles */
+body {
+  font-family: 'Inter', sans-serif;
+}
+
+/* Optional: If you want to use Fraunces elsewhere */
+.fraunces {
+  font-family: 'Fraunces', serif;
+}
