@@ -1,0 +1,1 @@
+export default function SettingsPage() { return <section className='page'><h1>Settings</h1><div className='panel'><p>Admin settings will live here.</p></div></section>; }

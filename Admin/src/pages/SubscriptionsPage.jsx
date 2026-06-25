@@ -1,0 +1,4 @@
+import { useEffect, useState } from 'react';
+import { getSubscriptions } from '../api/subscriptionApi';
+import DataTable from '../components/common/DataTable';
+export default function SubscriptionsPage() { const [rows, setRows] = useState([]); useEffect(() => { getSubscriptions().then((res) => setRows(res.data || [])); }, []); return <section className='page'><h1>Subscriptions</h1><DataTable columns={[{ key: 'user', label: 'Student', render: (r) => r.user?.name || '-' }, { key: 'plan', label: 'Plan' }, { key: 'status', label: 'Status' }, { key: 'amount', label: 'Amount', render: (r) => `Rs. ${r.amount}` }, { key: 'endDate', label: 'Ends', render: (r) => new Date(r.endDate).toLocaleDateString('en-IN') }]} rows={rows} /></section>; }

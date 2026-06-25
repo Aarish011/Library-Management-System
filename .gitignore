@@ -1,0 +1,235 @@
+# ============================
+# Node.js / JavaScript
+# ============================
+
+# Dependency directories
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.*.local
+
+# Build outputs
+dist/
+build/
+out/
+.next/
+.nuxt/
+.cache/
+
+# ============================
+# Backend (Node.js/Express)
+# ============================
+
+# Logs
+logs/
+*.log
+access.log
+error.log
+
+# Database files (unless you want to track seeds)
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+
+# Uploads and user files
+uploads/
+temp/
+tmp/
+storage/
+public/uploads/
+public/temp/
+
+# ============================
+# Frontend (React)
+# ============================
+
+# React build
+/build
+/static
+*.css.map
+*.js.map
+
+# Vite (if using Vite)
+dist/
+dist-ssr/
+*.local
+
+# ============================
+# IDE and Editor Files
+# ============================
+
+# VS Code
+.vscode/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.code-workspace
+
+# IntelliJ / WebStorm / PHPStorm
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+.idea_modules/
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Atom
+.atom/
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+*~
+\#*\#
+.\#*
+
+# ============================
+# Operating System Files
+# ============================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*.pid
+*.seed
+*.pid.lock
+
+# ============================
+# Docker
+# ============================
+
+docker-compose.override.yml
+.dockerignore
+Dockerfile
+*.tar.gz
+*.tar.bz2
+*.tar
+
+# ============================
+# Testing
+# ============================
+
+# Coverage directory used by tools like istanbul
+coverage/
+.nyc_output/
+
+# Testing files
+test/
+tests/
+*.test.js
+*.spec.js
+__tests__/
+
+# ============================
+# Documentation
+# ============================
+
+docs/_build/
+docs/_static/
+docs/_templates/
+*.epub
+*.mobi
+
+# ============================
+# Misc
+# ============================
+
+# NPM/Yarn
+.npm
+.yarn/
+.yarnrc
+.yarnrc.yml
+.yarn-integrity
+
+# TypeScript
+*.tsbuildinfo
+tsconfig.tsbuildinfo
+
+# ESLint
+.eslintcache
+
+# Prettier
+.prettiercache
+
+# Backup files
+*.bak
+*.backup
+*.orig
+*.tmp
+
+# Certificates
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# Secrets and keys
+*.secret
+*.private
+*.pem
+id_rsa*
+*.p8
+
+# ============================
+# Project Specific
+# ============================
+
+# Session storage
+sessions/
+session-store/
+
+# Uploaded profile pictures
+profile-pics/
+uploads/students/
+uploads/documents/
+
+# Backup database dumps
+backup/
+db-backup/
+
+# Temporary files from subscriptions
+subscription-temp/
+
+# Logs from notification service
+notification-logs/
+automation-logs/

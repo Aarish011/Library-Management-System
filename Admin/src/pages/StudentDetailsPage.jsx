@@ -1,0 +1,1 @@
+export default function StudentDetailsPage() { return <section className='page'><h1>Student Details</h1></section>; }
