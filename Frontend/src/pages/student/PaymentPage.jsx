@@ -19,6 +19,7 @@ import {
 import { getActiveReservation } from '../../api/reservationApi';
 import { getActiveSubscription } from '../../api/subscriptionApi';
 import useActionCooldown from '../../hooks/useActionCooldown';
+import InstitutePolicyNotice from '../../components/common/InstitutePolicyNotice';
 
 export default function PaymentPage() {
   const navigate = useNavigate();
@@ -468,6 +469,7 @@ export default function PaymentPage() {
             <h2 className='text-[17px] font-semibold text-slate-900 mb-4'>
               Payment method
             </h2>
+            <InstitutePolicyNotice className='mb-4' compact />
             <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
               <PaymentMethodCard
                 logo={razorpayLogo}

@@ -6,6 +6,7 @@ import {
   FaWhatsapp,
 } from 'react-icons/fa';
 import { Link } from 'react-router-dom';
+import InstitutePolicyNotice from './InstitutePolicyNotice';
 
 const Footer = () => {
   return (
@@ -188,6 +189,8 @@ const Footer = () => {
             </a>
           </div>
         </div>
+
+        <InstitutePolicyNotice className='mt-10 sm:mt-12' compact variant='dark' />
 
         {/* Bottom Bar */}
         <div className='border-t border-white/10 mt-10 sm:mt-12 pt-6 flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-gray-400 text-center md:text-left'>

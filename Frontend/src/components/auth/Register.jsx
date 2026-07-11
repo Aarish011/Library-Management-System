@@ -11,6 +11,7 @@ import {
   firebaseAuth,
   isFirebasePhoneAuthConfigured,
 } from '../../config/firebase';
+import InstitutePolicyNotice from '../common/InstitutePolicyNotice';
 
 const Register = () => {
   const navigate = useNavigate();
@@ -479,6 +480,8 @@ const Register = () => {
               <p className='text-red-500 text-sm mt-1'>{errors.preparation}</p>
             )}
           </div>
+
+          <InstitutePolicyNotice />
 
           {/* Submit Button */}
           <button
