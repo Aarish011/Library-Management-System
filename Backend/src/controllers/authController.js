@@ -322,10 +322,14 @@ exports.forgotPassword = async (req, res) => {
         user.passwordResetExpires = null;
         await user.save({ validateBeforeSave: false });
         console.error('Password reset delivery error:', deliveryError);
+        const isEmailConfigError = /email service is not configured/i.test(
+          deliveryError.message || ''
+        );
         return res.status(500).json({
           success: false,
-          message:
-            'Could not send the reset email right now. Please try again later.',
+          message: isEmailConfigError
+            ? 'Password reset email is not configured yet. Please contact the library desk.'
+            : 'Could not send the reset email right now. Please try again later.',
         });
       }
     }

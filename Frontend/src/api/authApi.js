@@ -45,7 +45,9 @@ export const forgotPassword = async (payload) => {
   try {
     const body =
       typeof payload === 'string' ? { email: payload, method: 'email' } : payload;
-    const response = await axios.post('/auth/forgot-password', body);
+    const response = await axios.post('/auth/forgot-password', body, {
+      timeout: 20000,
+    });
     return response.data;
   } catch (error) {
     throw error.response?.data || { message: 'Failed to send reset link' };

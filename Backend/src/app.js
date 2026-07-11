@@ -9,6 +9,7 @@ const dotenv = require('dotenv');
 const connectDB = require('./config/database');
 const errorHandler = require('./middleware/errorHandler');
 const seedAdmin = require('./utils/seedAdmin');
+const { getEmailConfigStatus } = require('./services/emailService');
 
 dotenv.config();
 
@@ -28,6 +29,15 @@ connectDB().then(async () => {
 });
 
 const app = express();
+const emailConfigStatus = getEmailConfigStatus();
+
+if (!emailConfigStatus.configured) {
+  console.warn('Email service is not fully configured:', {
+    hasHost: emailConfigStatus.hasHost,
+    hasUser: emailConfigStatus.hasUser,
+    hasPassword: emailConfigStatus.hasPassword,
+  });
+}
 
 function parseAllowedOrigins() {
   return [

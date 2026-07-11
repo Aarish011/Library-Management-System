@@ -37,6 +37,7 @@ const ForgotPasswordPage = () => {
       setSubmitted(true);
       toast.success('Reset link sent to your email');
     } catch (error) {
+      forgotPasswordCooldown.resetCooldown();
       const message = error.message || 'Failed to send reset link';
       setErrorMessage(message);
       toast.error(message);

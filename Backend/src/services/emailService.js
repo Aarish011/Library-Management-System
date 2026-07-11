@@ -5,20 +5,40 @@ function getTransporter() {
   const port = Number(process.env.EMAIL_PORT || 587);
   const user = process.env.EMAIL_USER;
   const pass = process.env.EMAIL_PASS;
+  const service = process.env.EMAIL_SERVICE;
 
   if (!host || !user || !pass) {
-    throw new Error('Email service is not configured');
+    throw new Error(
+      'Email service is not configured. Set EMAIL_HOST, EMAIL_USER, and EMAIL_PASS.'
+    );
   }
 
   return nodemailer.createTransport({
+    ...(service ? { service } : {}),
     host,
     port,
-    secure: port === 465,
+    secure:
+      process.env.EMAIL_SECURE === 'true' ||
+      port === 465,
     auth: {
       user,
       pass,
     },
   });
+}
+
+function getEmailConfigStatus() {
+  return {
+    configured: Boolean(
+      process.env.EMAIL_HOST &&
+        process.env.EMAIL_USER &&
+        process.env.EMAIL_PASS
+    ),
+    hasHost: Boolean(process.env.EMAIL_HOST),
+    hasUser: Boolean(process.env.EMAIL_USER),
+    hasPassword: Boolean(process.env.EMAIL_PASS),
+    from: process.env.EMAIL_FROM || process.env.EMAIL_USER || null,
+  };
 }
 
 async function sendPasswordResetEmail({ to, name, resetUrl }) {
@@ -55,4 +75,4 @@ async function sendPasswordResetEmail({ to, name, resetUrl }) {
   });
 }
 
-module.exports = { sendPasswordResetEmail };
+module.exports = { getEmailConfigStatus, sendPasswordResetEmail };
