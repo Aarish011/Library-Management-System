@@ -30,6 +30,7 @@ const STUDENT_LINKS = [
   { label: 'Book Seat', href: '/book-seat', live: true },
   { label: 'Subscription', href: '/subscription' },
   { label: 'Payments', href: '/payments' },
+  { label: 'Raise issue', href: '/support' },
 ];
 
 function Logo() {
@@ -224,6 +225,23 @@ function ProfileMenu({ user, onLogout }) {
             </svg>
             Notifications
           </Link>
+          <Link
+            to='/support'
+            role='menuitem'
+            className='flex items-center gap-2.5 px-3.5 py-2 text-[13.5px] text-[#C7CCDC] hover:bg-white/5 hover:text-[#EDEFF5]'
+          >
+            <svg
+              width='16'
+              height='16'
+              viewBox='0 0 24 24'
+              fill='none'
+              stroke='currentColor'
+              strokeWidth='1.8'
+            >
+              <path d='M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v8z' />
+            </svg>
+            Support
+          </Link>
           <div className='border-t border-white/10 mt-1 pt-1'>
             <button
               onClick={onLogout}
@@ -268,6 +286,7 @@ export default function Navbar({
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
   const links = isAuthenticated ? STUDENT_LINKS : PUBLIC_LINKS;
+  const closeMobileMenu = () => setMobileOpen(false);
 
   // ✅ Get current path from React Router
   const currentPath = location.pathname;
@@ -293,6 +312,10 @@ export default function Navbar({
   useEffect(() => {
     setMobileOpen(false);
   }, [isAuthenticated]);
+
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [location.pathname]);
 
   return (
     <header className='sticky top-0 z-50 bg-[#11182B]/95 backdrop-blur-sm border-b border-white/10'>
@@ -379,6 +402,7 @@ export default function Navbar({
             <Link
               key={l.href}
               to={l.href}
+              onClick={closeMobileMenu}
               className={`flex items-center justify-between px-3 py-2.5 rounded-md text-[15px] font-medium ${getMobileActiveClass(
                 l.href
               )}`}
@@ -394,6 +418,7 @@ export default function Navbar({
             <>
               <Link
                 to='/notifications'
+                onClick={closeMobileMenu}
                 className='flex items-center justify-between px-3 py-2.5 rounded-md text-[15px] font-medium text-[#C7CCDC] hover:bg-white/5'
               >
                 Notifications
@@ -405,12 +430,23 @@ export default function Navbar({
               </Link>
               <Link
                 to='/profile'
+                onClick={closeMobileMenu}
                 className='px-3 py-2.5 rounded-md text-[15px] font-medium text-[#C7CCDC] hover:bg-white/5'
               >
                 My profile
               </Link>
+              <Link
+                to='/support'
+                onClick={closeMobileMenu}
+                className='px-3 py-2.5 rounded-md text-[15px] font-medium text-[#C7CCDC] hover:bg-white/5'
+              >
+                Support
+              </Link>
               <button
-                onClick={onLogout}
+                onClick={() => {
+                  closeMobileMenu();
+                  onLogout();
+                }}
                 className='text-left px-3 py-2.5 rounded-md text-[15px] font-medium text-[#E8A2A2] hover:bg-white/5'
               >
                 Logout
@@ -420,12 +456,14 @@ export default function Navbar({
             <div className='flex flex-col gap-2 pt-1'>
               <Link
                 to='/login'
+                onClick={closeMobileMenu}
                 className='text-center px-4 py-2.5 rounded-md text-[15px] font-medium text-[#EDEFF5] border border-white/15 hover:bg-white/5'
               >
                 Login
               </Link>
               <Link
                 to='/register'
+                onClick={closeMobileMenu}
                 className='text-center px-4 py-2.5 rounded-md text-[15px] font-semibold bg-[#F4B740] text-[#412402] hover:bg-[#FAC775]'
               >
                 Register

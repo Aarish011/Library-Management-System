@@ -17,6 +17,11 @@ const subscriptionSchema = new mongoose.Schema(
       enum: ['library_access', 'reserved_seat', 'monthly', 'quarterly', 'yearly'],
       required: true,
     },
+    slot: {
+      type: String,
+      enum: ['morning', 'evening', 'full_day'],
+      default: 'full_day',
+    },
     startDate: {
       type: Date,
       required: true,
@@ -43,9 +48,17 @@ const subscriptionSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    lockerRent: {
+      type: Number,
+      default: 0,
+    },
     autoRenew: {
       type: Boolean,
       default: true,
+    },
+    expiryProcessedAt: {
+      type: Date,
+      default: null,
     },
   },
   {

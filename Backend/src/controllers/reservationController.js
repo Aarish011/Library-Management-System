@@ -1,6 +1,74 @@
 const Reservation = require('../models/Reservation');
 const Seat = require('../models/Seats');
+const Payment = require('../models/Payment');
 const mongoose = require('mongoose');
+
+async function markPendingPaymentsFailedForReservations(
+  reservationIds,
+  reason = 'Seat hold expired before payment'
+) {
+  if (!reservationIds || reservationIds.length === 0) return 0;
+
+  const result = await Payment.updateMany(
+    {
+      reservation: { $in: reservationIds },
+      status: 'pending',
+    },
+    {
+      status: 'failed',
+      failureReason: reason,
+      verifiedAt: new Date(),
+    }
+  );
+
+  return result.modifiedCount || 0;
+}
+
+async function syncSeatStatusForReservations(seatId, session = null) {
+  const activeReservations = await Reservation.find({
+    seat: seatId,
+    status: { $in: ['active', 'confirmed'] },
+  })
+    .select('user slot status reservedUntil')
+    .session(session);
+
+  if (activeReservations.length === 0) {
+    await Seat.findByIdAndUpdate(
+      seatId,
+      { status: 'available', heldBy: null, holdExpiresAt: null },
+      session ? { session } : undefined
+    );
+    return;
+  }
+
+  const heldReservation = activeReservations.find(
+    (reservation) => reservation.status === 'active'
+  );
+  const hasFullDay = activeReservations.some(
+    (reservation) => reservation.slot === 'full_day'
+  );
+  const generalSlots = new Set(
+    activeReservations
+      .filter((reservation) => ['morning', 'evening'].includes(reservation.slot))
+      .map((reservation) => reservation.slot)
+  );
+  const bothGeneralSlotsBooked =
+    generalSlots.has('morning') && generalSlots.has('evening');
+
+  await Seat.findByIdAndUpdate(
+    seatId,
+    {
+      status: heldReservation
+        ? 'held'
+        : hasFullDay || bothGeneralSlotsBooked
+          ? 'booked'
+          : 'available',
+      heldBy: heldReservation?.user || null,
+      holdExpiresAt: heldReservation?.reservedUntil || null,
+    },
+    session ? { session } : undefined
+  );
+}
 
 // Get active reservation for current user
 exports.getActiveReservation = async (req, res) => {
@@ -25,13 +93,9 @@ exports.getActiveReservation = async (req, res) => {
     // Only temporary holds expire. Confirmed booked seats remain current seats.
     if (activeReservation.status === 'active' && new Date() > activeReservation.reservedUntil) {
       await activeReservation.updateOne({ status: 'expired' });
+      await markPendingPaymentsFailedForReservations([activeReservation._id]);
 
-      // Release the seat
-      await Seat.findByIdAndUpdate(activeReservation.seat._id, {
-        status: 'available',
-        heldBy: null,
-        holdExpiresAt: null,
-      });
+      await syncSeatStatusForReservations(activeReservation.seat._id);
 
       return res.json({
         success: true,
@@ -91,13 +155,9 @@ exports.getReservationStatus = async (req, res) => {
     if (status === 'active' && new Date() > reservation.reservedUntil) {
       await reservation.updateOne({ status: 'expired' });
       status = 'expired';
+      await markPendingPaymentsFailedForReservations([reservation._id]);
 
-      // Release the seat
-      await Seat.findByIdAndUpdate(reservation.seat._id, {
-        status: 'available',
-        heldBy: null,
-        holdExpiresAt: null,
-      });
+      await syncSeatStatusForReservations(reservation.seat._id);
     }
 
     if (status === 'active') {
@@ -149,16 +209,7 @@ exports.cancelReservation = async (req, res) => {
     // Cancel reservation
     await reservation.updateOne({ status: 'cancelled' }, { session });
 
-    // Release the seat
-    await Seat.findByIdAndUpdate(
-      reservation.seat,
-      {
-        status: 'available',
-        heldBy: null,
-        holdExpiresAt: null,
-      },
-      { session }
-    );
+    await syncSeatStatusForReservations(reservation.seat, session);
 
     await session.commitTransaction();
     session.endSession();
@@ -189,19 +240,42 @@ exports.cancelReservation = async (req, res) => {
 };
 
 // Create a new reservation (called from seat controller)
-exports.createReservation = async (userId, seatId, duration = 300) => {
+exports.createReservation = async (
+  userId,
+  seatId,
+  duration = 300,
+  plan,
+  slot = 'full_day'
+) => {
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-    // Check if seat is available
     const seat = await Seat.findById(seatId).session(session);
     if (!seat) {
       throw new Error('Seat not found');
     }
 
-    if (seat.status !== 'available') {
+    if (!seat.isActive) {
+      throw new Error('Seat is not available');
+    }
+
+    if (slot === 'full_day' && seat.status !== 'available') {
       throw new Error(`Seat is ${seat.status}`);
+    }
+
+    const slotConflict = await Reservation.findOne({
+      seat: seatId,
+      slot,
+      status: { $in: ['active', 'confirmed'] },
+    }).session(session);
+
+    if (slotConflict) {
+      throw new Error(
+        slot === 'full_day'
+          ? 'Seat is already booked'
+          : `The ${slot} slot is already booked for this seat`
+      );
     }
 
     // Check if user has active reservation
@@ -221,6 +295,8 @@ exports.createReservation = async (userId, seatId, duration = 300) => {
         {
           user: userId,
           seat: seatId,
+          plan,
+          slot,
           reservedUntil,
           duration,
           status: 'active',
@@ -229,20 +305,8 @@ exports.createReservation = async (userId, seatId, duration = 300) => {
       { session }
     );
 
-    // Update seat status
-    const bookedSeat = await Seat.findOneAndUpdate(
-      { _id: seatId, status: 'available' },
-      {
-        status: 'held',
-        heldBy: userId,
-        holdExpiresAt: reservedUntil,
-      },
-      { new: true, session }
-    );
-
-    if (!bookedSeat) {
-      throw new Error('Seat is no longer available');
-    }
+    await syncSeatStatusForReservations(seatId, session);
+    const bookedSeat = await Seat.findById(seatId).session(session);
 
     await session.commitTransaction();
     session.endSession();
@@ -284,23 +348,20 @@ exports.cleanupExpiredReservations = async () => {
     );
 
     const reservationIds = expiredReservations.map((r) => r._id);
-    const seatIds = expiredReservations.map((r) => r.seat);
+    const seatIds = [...new Set(expiredReservations.map((r) => String(r.seat)))];
 
     // Update reservations to expired
     await Reservation.updateMany(
       { _id: { $in: reservationIds } },
       { status: 'expired' }
     );
-
-    // Release seats
-    await Seat.updateMany(
-      { _id: { $in: seatIds }, status: 'held' },
-      {
-        status: 'available',
-        heldBy: null,
-        holdExpiresAt: null,
-      }
+    const failedPayments = await markPendingPaymentsFailedForReservations(
+      reservationIds
     );
+
+    for (const seatId of seatIds) {
+      await syncSeatStatusForReservations(seatId);
+    }
 
     // Emit socket events
     const io = global.io;
@@ -314,7 +375,7 @@ exports.cleanupExpiredReservations = async () => {
       });
     }
 
-    return { count: expiredReservations.length };
+    return { count: expiredReservations.length, failedPayments };
   } catch (error) {
     console.error('Cleanup expired reservations error:', error);
     throw error;

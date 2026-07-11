@@ -24,17 +24,32 @@ const notificationSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
-    action: {
-      type: String,
+    isPersistent: {
+      type: Boolean,
+      default: false,
+    },
+    relatedSubscription: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Subscription',
       default: null,
     },
-    actionUrl: {
+    action: {
       type: String,
       default: null,
     },
     bannerUrl: {
       type: String,
       default: null,
+    },
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    audience: {
+      type: String,
+      enum: ['all', 'single', 'system'],
+      default: 'system',
     },
     broadcastKey: {
       type: String,

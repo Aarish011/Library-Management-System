@@ -4,10 +4,15 @@ const Subscription = require('../models/Subscription');
 const { createOrder, verifyPaymentSignature } = require('../services/razorpayService');
 const {
   getPlan,
-  getPlanAmount,
+  calculatePlanFees,
+  normalizeSlot,
   normalizeLockerSelected,
+  shouldChargeLockerDeposit,
   activateSubscriptionForUser,
+  renewSubscriptionForUser,
 } = require('../services/subscriptionService');
+
+const RENEWAL_WINDOW_MS = 2 * 24 * 60 * 60 * 1000;
 
 async function getActiveSubscription(userId) {
   return Subscription.findOne({
@@ -17,19 +22,48 @@ async function getActiveSubscription(userId) {
   }).sort({ endDate: -1 });
 }
 
-async function ensureSeatHoldForReservedPlan(userId, planConfig) {
+async function ensureSeatHoldForReservedPlan(userId, planConfig, slot) {
   if (!planConfig.reservesSeat) return;
 
   const reservation = await Reservation.findOne({
     user: userId,
     status: { $in: ['active', 'confirmed'] },
-  }).sort({ createdAt: -1 });
+    slot,
+  })
+    .populate('seat', 'seatNumber')
+    .sort({ createdAt: -1 });
 
   if (!reservation) {
     const error = new Error('Select and hold a seat before paying for the reserved seat package');
     error.statusCode = 400;
     throw error;
   }
+
+  if (reservation.plan && reservation.plan !== planConfig.plan) {
+    const error = new Error('The selected payment plan does not match your seat hold');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (reservation.slot !== slot) {
+    const error = new Error('The selected payment slot does not match your seat hold');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const seatNumber = Number(reservation.seat?.seatNumber);
+  const [minimumSeat, maximumSeat] = planConfig.allowedSeatRange;
+  if (seatNumber < minimumSeat || seatNumber > maximumSeat) {
+    const error = new Error(
+      planConfig.plan === 'library_access'
+        ? 'The Rs. 1000 general slot plan allows seats 66 to 75 only'
+        : 'The Rs. 1500 plan allows seats 1 to 65 only'
+    );
+    error.statusCode = 403;
+    throw error;
+  }
+
+  return reservation;
 }
 
 function activeSubscriptionResponse(res, subscription) {
@@ -40,7 +74,25 @@ function activeSubscriptionResponse(res, subscription) {
   });
 }
 
-function getPaymentSelection(body = {}) {
+function getRenewalSubscription(activeSubscription, planConfig) {
+  if (!activeSubscription) return null;
+
+  const timeRemaining =
+    new Date(activeSubscription.endDate).getTime() - Date.now();
+  if (timeRemaining > RENEWAL_WINDOW_MS) return null;
+
+  if (activeSubscription.plan !== planConfig.plan) {
+    const error = new Error(
+      'Renewal must use your current plan. Change plans after the current membership expires.'
+    );
+    error.statusCode = 409;
+    throw error;
+  }
+
+  return activeSubscription;
+}
+
+async function getPaymentSelection(userId, body = {}) {
   const requestedPlan = body.plan || body.planType;
   const planConfig = getPlan(requestedPlan);
   const lockerSelected = normalizeLockerSelected(body.lockerSelected);
@@ -48,24 +100,49 @@ function getPaymentSelection(body = {}) {
   if (!planConfig) {
     const error = new Error('Invalid subscription plan');
     error.statusCode = 400;
+      throw error;
+  }
+
+  const slot = normalizeSlot(planConfig, body.slot);
+  if (!slot) {
+    const error = new Error('Select morning or evening slot for the general seat package');
+    error.statusCode = 400;
     throw error;
   }
 
+  const chargeLockerDeposit = lockerSelected
+    ? await shouldChargeLockerDeposit(userId)
+    : false;
+  const fees = calculatePlanFees(planConfig, lockerSelected, chargeLockerDeposit);
+
   return {
     planConfig,
+    slot,
     lockerSelected,
-    lockerDeposit: lockerSelected ? planConfig.lockerDeposit : 0,
-    amount: getPlanAmount(planConfig, lockerSelected),
+    lockerRent: fees.lockerRent,
+    lockerDeposit: fees.lockerDeposit,
+    amount: fees.total,
   };
 }
 
 exports.createRazorpayOrder = async (req, res) => {
   try {
-    const { planConfig, lockerSelected, lockerDeposit, amount } = getPaymentSelection(req.body);
+    const { planConfig, slot, lockerSelected, lockerRent, lockerDeposit, amount } =
+      await getPaymentSelection(req.user._id, req.body);
 
     const activeSubscription = await getActiveSubscription(req.user._id);
-    if (activeSubscription) return activeSubscriptionResponse(res, activeSubscription);
-    await ensureSeatHoldForReservedPlan(req.user._id, planConfig);
+    const renewalSubscription = getRenewalSubscription(
+      activeSubscription,
+      planConfig
+    );
+    if (activeSubscription && !renewalSubscription) {
+      return activeSubscriptionResponse(res, activeSubscription);
+    }
+    const reservation = await ensureSeatHoldForReservedPlan(
+      req.user._id,
+      planConfig,
+      slot
+    );
 
     if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
       return res.status(500).json({
@@ -82,6 +159,7 @@ exports.createRazorpayOrder = async (req, res) => {
       notes: {
         userId: String(req.user._id),
         plan: planConfig.plan,
+        slot,
         lockerSelected: String(lockerSelected),
       },
     });
@@ -89,13 +167,17 @@ exports.createRazorpayOrder = async (req, res) => {
     const payment = await Payment.create({
       user: req.user._id,
       plan: planConfig.plan,
+      slot,
       amount,
       lockerSelected,
+      lockerRent,
       lockerDeposit,
       currency: order.currency,
       paymentMethod: 'razorpay',
       status: 'pending',
       razorpayOrderId: order.id,
+      reservation: reservation?._id || null,
+      subscription: renewalSubscription?._id || null,
     });
 
     res.status(201).json({
@@ -108,7 +190,9 @@ exports.createRazorpayOrder = async (req, res) => {
         currency: order.currency,
         keyId: process.env.RAZORPAY_KEY_ID,
         plan: planConfig,
+        slot,
         lockerSelected,
+        lockerRent,
         lockerDeposit,
         user: {
           name: req.user.name,
@@ -147,12 +231,31 @@ exports.verifyRazorpayPayment = async (req, res) => {
       user: req.user._id,
       razorpayOrderId: razorpay_order_id,
       status: 'pending',
-    });
+    }).populate('reservation', 'status reservedUntil');
 
     if (!payment) {
       return res.status(404).json({
         success: false,
         message: 'Pending payment not found',
+      });
+    }
+
+    if (
+      payment.reservation &&
+      (payment.reservation.status === 'expired' ||
+        (payment.reservation.status === 'active' &&
+          payment.reservation.reservedUntil <= new Date()))
+    ) {
+      payment.status = 'failed';
+      payment.failureReason = 'Seat hold expired before payment';
+      payment.razorpayPaymentId = razorpay_payment_id;
+      payment.razorpaySignature = razorpay_signature;
+      payment.verifiedAt = new Date();
+      await payment.save();
+
+      return res.status(409).json({
+        success: false,
+        message: 'Your seat hold expired. Please select the seat again and try payment again.',
       });
     }
 
@@ -174,11 +277,26 @@ exports.verifyRazorpayPayment = async (req, res) => {
       });
     }
 
-    const subscriptionData = await activateSubscriptionForUser(
-      req.user._id,
-      payment.plan,
-      { lockerSelected: payment.lockerSelected }
-    );
+    const subscriptionData = payment.subscription
+      ? await renewSubscriptionForUser(
+          req.user._id,
+          payment.subscription,
+          payment.plan,
+          {
+            lockerSelected: payment.lockerSelected,
+            slot: payment.slot,
+            actorId: req.user._id,
+          }
+        )
+      : await activateSubscriptionForUser(
+          req.user._id,
+          payment.plan,
+          {
+            lockerSelected: payment.lockerSelected,
+            slot: payment.slot,
+            actorId: req.user._id,
+          }
+        );
 
     payment.status = 'paid';
     payment.subscription = subscriptionData.subscription._id;
@@ -209,22 +327,37 @@ exports.verifyRazorpayPayment = async (req, res) => {
 
 exports.createDeskReference = async (req, res) => {
   try {
-    const { planConfig, lockerSelected, lockerDeposit, amount } = getPaymentSelection(req.body);
+    const { planConfig, slot, lockerSelected, lockerRent, lockerDeposit, amount } =
+      await getPaymentSelection(req.user._id, req.body);
 
     const activeSubscription = await getActiveSubscription(req.user._id);
-    if (activeSubscription) return activeSubscriptionResponse(res, activeSubscription);
-    await ensureSeatHoldForReservedPlan(req.user._id, planConfig);
+    const renewalSubscription = getRenewalSubscription(
+      activeSubscription,
+      planConfig
+    );
+    if (activeSubscription && !renewalSubscription) {
+      return activeSubscriptionResponse(res, activeSubscription);
+    }
+    const reservation = await ensureSeatHoldForReservedPlan(
+      req.user._id,
+      planConfig,
+      slot
+    );
 
     const referenceId = `DESK-${Date.now()}-${String(req.user._id).slice(-4).toUpperCase()}`;
     const payment = await Payment.create({
       user: req.user._id,
       plan: planConfig.plan,
+      slot,
       amount,
       lockerSelected,
+      lockerRent,
       lockerDeposit,
       paymentMethod: 'pay_on_desk',
       status: 'pending',
       referenceId,
+      reservation: reservation?._id || null,
+      subscription: renewalSubscription?._id || null,
     });
 
     res.status(201).json({
@@ -234,7 +367,9 @@ exports.createDeskReference = async (req, res) => {
         payment,
         referenceId,
         plan: planConfig,
+        slot,
         lockerSelected,
+        lockerRent,
         lockerDeposit,
       },
     });
@@ -246,7 +381,7 @@ exports.createDeskReference = async (req, res) => {
 exports.getPaymentHistory = async (req, res) => {
   try {
     const payments = await Payment.find({ user: req.user._id })
-      .populate('subscription', 'plan startDate endDate status lockerSelected lockerDeposit')
+      .populate('subscription', 'plan slot startDate endDate status lockerSelected lockerDeposit lockerRent')
       .sort({ paymentDate: -1, createdAt: -1 })
       .limit(20);
 

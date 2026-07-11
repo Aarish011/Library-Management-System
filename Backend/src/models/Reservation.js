@@ -12,6 +12,17 @@ const reservationSchema = new mongoose.Schema(
       ref: 'Seat',
       required: true,
     },
+    plan: {
+      type: String,
+      enum: ['library_access', 'reserved_seat'],
+      required: true,
+    },
+    slot: {
+      type: String,
+      enum: ['morning', 'evening', 'full_day'],
+      default: 'full_day',
+      required: true,
+    },
     reservedAt: {
       type: Date,
       default: Date.now,
@@ -38,6 +49,15 @@ const reservationSchema = new mongoose.Schema(
 // Indexes
 reservationSchema.index({ user: 1 });
 reservationSchema.index({ seat: 1 });
+reservationSchema.index(
+  { seat: 1, slot: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      $or: [{ status: 'active' }, { status: 'confirmed' }],
+    },
+  }
+);
 reservationSchema.index({ status: 1 });
 reservationSchema.index({ reservedUntil: 1 });
 

@@ -10,10 +10,31 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
+  useEffect(() => {
+    const handleSessionExpired = () => {
+      setUser(null);
+      setIsAuthenticated(false);
+    };
+
+    window.addEventListener('bookshelf:session-expired', handleSessionExpired);
+    return () =>
+      window.removeEventListener(
+        'bookshelf:session-expired',
+        handleSessionExpired
+      );
+  }, []);
+
   // Load user on mount
   useEffect(() => {
     const loadUser = async () => {
       const token = localStorage.getItem('token');
+      let cachedUser = null;
+
+      try {
+        cachedUser = JSON.parse(localStorage.getItem('user') || 'null');
+      } catch {
+        localStorage.removeItem('user');
+      }
 
       if (!token) {
         setLoading(false);
@@ -25,14 +46,26 @@ export const AuthProvider = ({ children }) => {
         if (response.success) {
           setUser(response.data);
           setIsAuthenticated(true);
+          localStorage.setItem('user', JSON.stringify(response.data));
         } else {
           localStorage.removeItem('token');
+          localStorage.removeItem('user');
           setIsAuthenticated(false);
         }
       } catch (error) {
         console.error('Failed to load user:', error);
-        localStorage.removeItem('token');
-        setIsAuthenticated(false);
+        const sessionRejected =
+          error.status === 401 || error.status === 403;
+
+        if (sessionRejected) {
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          setUser(null);
+          setIsAuthenticated(false);
+        } else if (cachedUser) {
+          setUser(cachedUser);
+          setIsAuthenticated(true);
+        }
       } finally {
         setLoading(false);
       }

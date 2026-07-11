@@ -12,6 +12,7 @@ const {
 router.post('/register', validateRegister, authController.register);
 router.post('/login', validateLogin, authController.login);
 router.post('/forgot-password', authController.forgotPassword);
+router.post('/reset-password/:token', authController.resetPassword);
 
 // Protected routes
 router.get('/me', protect, authController.getMe);

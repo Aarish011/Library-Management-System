@@ -35,9 +35,16 @@ export default function SubscriptionPage() {
 
   const handleSubscribe = useCallback(
     (planConfig) => {
-      navigate('/payments', { state: { selectedPlan: planConfig } });
+      const currentSubscription = subscriptionData?.subscription;
+      if (currentSubscription?.plan === planConfig.plan) {
+        navigate('/payments', {
+          state: { selectedPlan: planConfig, renewal: true },
+        });
+        return;
+      }
+      navigate('/book-seat', { state: { selectedPlan: planConfig } });
     },
-    [navigate]
+    [navigate, subscriptionData]
   );
 
   if (loading) return <SubscriptionSkeleton />;
@@ -81,6 +88,10 @@ export default function SubscriptionPage() {
               plan={plan}
               isCurrent={subscriptionData?.subscription?.plan === plan.plan}
               hasCurrentPlan={Boolean(subscriptionData?.subscription)}
+              canRenew={
+                subscriptionData?.subscription?.plan === plan.plan &&
+                subscriptionData?.daysRemaining <= 2
+              }
               onSubscribe={() => handleSubscribe(plan)}
               isSubmitting={submittingPlanId === plan.id}
             />
@@ -163,7 +174,14 @@ function Info({ label, value }) {
   );
 }
 
-function PlanCard({ plan, isCurrent, hasCurrentPlan, onSubscribe, isSubmitting }) {
+function PlanCard({
+  plan,
+  isCurrent,
+  hasCurrentPlan,
+  canRenew,
+  onSubscribe,
+  isSubmitting,
+}) {
   const price = computePrice(plan);
 
   return (
@@ -204,9 +222,13 @@ function PlanCard({ plan, isCurrent, hasCurrentPlan, onSubscribe, isSubmitting }
       <button
         type='button'
         onClick={onSubscribe}
-        disabled={isCurrent || isSubmitting}
+        disabled={
+          isSubmitting ||
+          (isCurrent && !canRenew) ||
+          (hasCurrentPlan && !isCurrent)
+        }
         className={`mt-6 w-full py-2.5 rounded-lg text-[14px] font-medium transition-colors flex items-center justify-center gap-2 ${
-          isCurrent
+          isCurrent && !canRenew
             ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
             : plan.highlight
               ? 'bg-[#11182B] text-white hover:bg-[#1B2540]'
@@ -217,10 +239,12 @@ function PlanCard({ plan, isCurrent, hasCurrentPlan, onSubscribe, isSubmitting }
           <>
             <Spinner /> Processing...
           </>
+        ) : isCurrent && canRenew ? (
+          'Renew current plan'
         ) : isCurrent ? (
-          'Current plan'
+          'Current plan - renewal opens 2 days before expiry'
         ) : hasCurrentPlan ? (
-          'Switch plan'
+          'Available after current plan expires'
         ) : (
           'Activate plan'
         )}
@@ -234,7 +258,7 @@ function ComparisonNote() {
     <div className='bg-white rounded-2xl border border-slate-200 p-5 sm:p-6'>
       <p className='text-[13px] text-slate-500'>
         <span className='font-medium text-slate-700'>Note: </span>
-        Library Access is Rs. 1250 per month without seat reservation. The Reserved Seat package is Rs. 1500 per month and confirms your selected seat after payment. Locker is optional and adds a refundable Rs. 250 deposit during payment.
+        General Seats 66 to 75 cost Rs. 1000 per selected morning/evening slot. General lockers add Rs. 100 monthly rent plus a refundable Rs. 250 security deposit. Reserved Seats 1 to 65 cost Rs. 1500 per month and locker selection only adds the refundable Rs. 250 security deposit once.
       </p>
     </div>
   );
@@ -246,7 +270,7 @@ function BookSeatTeaser({ onBookSeat }) {
       <div>
         <p className='text-[15px] font-semibold text-white'>Need a study seat?</p>
         <p className='text-[13px] text-[#9AA4C2] mt-1'>
-          Choose an available seat from the live library map. Seat reservation uses the Rs. 1500 package.
+          General: seats 66 to 75 for Rs. 1000 per slot. Reserved: seats 1 to 65 for Rs. 1500.
         </p>
       </div>
       <button

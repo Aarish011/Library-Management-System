@@ -9,6 +9,7 @@ import AuthLayout from '../layouts/AuthLayout';
 import LoginPage from '../pages/auth/LoginPage';
 import RegisterPage from '../pages/auth/RegisterPage';
 import ForgotPasswordPage from '../pages/auth/ForgotPasswordPage';
+import ResetPasswordPage from '../pages/auth/ResetPasswordPage';
 
 // Public Pages
 import HomePage from '../pages/public/HomePage';
@@ -23,6 +24,7 @@ import PaymentPage from '../pages/student/PaymentPage';
 import SubscriptionPage from '../pages/student/SubscriptionPage';
 import NotificationsPage from '../pages/student/NotificationsPage';
 import NotificationDetailPage from '../pages/student/NotificationDetailPage';
+import IssuePage from '../pages/student/IssuePage';
 import ProfilePage from '../pages/student/ProfilePage';
 import PaymentSuccessPage from '../pages/student/PaymentSuccessPage';
 
@@ -58,6 +60,7 @@ const AppRoutes = () => {
             }
           />
           <Route path='/forgot-password' element={<ForgotPasswordPage />} />
+          <Route path='/reset-password/:token' element={<ResetPasswordPage />} />
         </Route>
 
         {/* Protected Student Routes */}
@@ -67,6 +70,7 @@ const AppRoutes = () => {
             <Route path='/book-seat' element={<SeatSelectionPage />} />
             <Route path='/payments' element={<PaymentPage />} />
             <Route path='/subscription' element={<SubscriptionPage />} />
+            <Route path='/support' element={<IssuePage />} />
             <Route path='/notifications' element={<NotificationsPage />} />
             <Route path='/notifications/:notificationId' element={<NotificationDetailPage />} />
             <Route path='/profile' element={<ProfilePage />} />

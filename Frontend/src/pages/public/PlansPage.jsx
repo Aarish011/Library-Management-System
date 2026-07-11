@@ -1,15 +1,15 @@
 ﻿const plans = [
   {
-    name: 'Library Access',
-    price: 'Rs. 1250',
+    name: 'General Seat',
+    price: 'Rs. 1000',
     duration: '30 Days',
-    features: ['Full library access', 'Seat not reserved', 'WiFi', 'AC', 'Charging', 'Optional refundable locker: Rs. 250'],
+    features: ['Morning or evening slot from 66 to 75', 'Full library access', 'WiFi', 'AC', 'Charging', 'Optional locker: Rs. 100/month + refundable Rs. 250 security'],
   },
   {
-    name: 'Library Access + Reserved Seat',
+    name: 'Reserved Seat',
     price: 'Rs. 1500',
     duration: '30 Days',
-    features: ['Full library access', 'Selected seat reserved after payment', 'WiFi', 'AC', 'Charging', 'Optional refundable locker: Rs. 250'],
+    features: ['Full library access', 'Reserved seat from 1 to 65', 'WiFi', 'AC', 'Charging', 'Optional locker: refundable Rs. 250 security only'],
   },
 ];
 

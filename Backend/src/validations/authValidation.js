@@ -22,6 +22,11 @@ exports.validateRegister = [
     .matches(/^[0-9]{10}$/)
     .withMessage('Please enter a valid 10-digit phone number'),
 
+  body('firebaseIdToken')
+    .trim()
+    .notEmpty()
+    .withMessage('Please verify your phone number before registration'),
+
   body('password')
     .notEmpty()
     .withMessage('Password is required')

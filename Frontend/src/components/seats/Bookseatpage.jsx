@@ -1,5 +1,5 @@
 ﻿import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import Seat from '../../components/seats/Seat';
 import SeatLegend from '../../components/seats/Seatlegend';
 import BookingSummary from '../../components/seats/Bookingsummary';
@@ -11,13 +11,23 @@ import {
   SECTIONS,
 } from '../../utils/seatLayoutConfig';
 import toast from 'react-hot-toast';
+import { useAuth } from '../../hooks/useAuth';
+import { PLANS, getPlan } from '../../utils/plansConfig';
+import useActionCooldown from '../../hooks/useActionCooldown';
 
 export default function BookSeatPage() {
   const navigate = useNavigate();
+  const { state } = useLocation();
+  const { user } = useAuth();
+  const bookingCooldown = useActionCooldown(8000);
+  const [selectedPlan, setSelectedPlan] = useState(
+    () => state?.selectedPlan || getPlan('reserved_seat')
+  );
   const [seats, setSeats] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [selectedSeatId, setSelectedSeatId] = useState(null);
+  const [selectedSlot, setSelectedSlot] = useState(null);
   const [isBooking, setIsBooking] = useState(false);
   const isMounted = useRef(true);
 
@@ -172,13 +182,20 @@ export default function BookSeatPage() {
     const map = new Map();
     seats.forEach((seat) => {
       if (seat?.seatNumber) {
-        map.set(String(seat.seatNumber), seat);
+        const seatNumber = Number(seat.seatNumber);
+        const [minimumSeat, maximumSeat] =
+          selectedPlan.allowedSeatRange || [1, 75];
+        map.set(String(seat.seatNumber), {
+          ...seat,
+          unavailableForPlan:
+            seatNumber < minimumSeat || seatNumber > maximumSeat,
+        });
       }
     });
     console.log('ðŸ—ºï¸ Seat Map size:', map.size);
     console.log('ðŸ—ºï¸ Seat Map keys:', Array.from(map.keys()));
     return map;
-  }, [seats]);
+  }, [seats, selectedPlan]);
 
   // ---------- STATS ----------
   const stats = useMemo(() => {
@@ -195,9 +212,30 @@ export default function BookSeatPage() {
     return seats.find((s) => s._id === selectedSeatId) || null;
   }, [seats, selectedSeatId]);
 
+  const handlePlanChange = useCallback((plan) => {
+    setSelectedPlan(plan);
+    setSelectedSeatId(null);
+    setSelectedSlot(null);
+  }, []);
+
   // ---------- SELECT SEAT ----------
   const handleSelectSeat = useCallback((seat) => {
     if (!seat) return;
+
+    const seatNumber = Number(seat.seatNumber);
+    if (seat.unavailableForPlan) {
+      toast.error(
+        selectedPlan.plan === 'library_access'
+          ? 'The Rs. 1000 general slot plan allows seats 66 to 75 only'
+          : 'The Rs. 1500 plan allows seats 1 to 65 only'
+      );
+      return;
+    }
+
+    if (seatNumber >= 1 && seatNumber <= 10 && user?.gender !== 'female') {
+      toast.error('Seats 1 to 10 are reserved for female students only');
+      return;
+    }
 
     if (seat.status === 'occupied') {
       toast.error(`Seat ${seat.seatNumber} is occupied`);
@@ -209,22 +247,63 @@ export default function BookSeatPage() {
       return;
     }
 
-    setSelectedSeatId((prev) => (prev === seat._id ? null : seat._id));
-  }, []);
+    setSelectedSeatId((prev) => {
+      const nextSeatId = prev === seat._id ? null : seat._id;
+      if (!nextSeatId) {
+        setSelectedSlot(null);
+        return nextSeatId;
+      }
+
+      if (selectedPlan.plan === 'library_access') {
+        const availability = seat.slotAvailability || {};
+        setSelectedSlot(
+          availability.morning === 'available'
+            ? 'morning'
+            : availability.evening === 'available'
+              ? 'evening'
+              : null
+        );
+      } else {
+        setSelectedSlot('full_day');
+      }
+
+      return nextSeatId;
+    });
+  }, [selectedPlan.plan, user?.gender]);
 
   // ---------- BOOK SEAT ----------
   const handleConfirmBooking = useCallback(async (booking = {}) => {
+    if (
+      !bookingCooldown.guard((seconds) =>
+        toast.error(`Please wait ${seconds}s before trying again`)
+      )
+    ) {
+      return;
+    }
+
     if (!selectedSeat) {
       toast.error('Select a seat first');
       return;
     }
 
+    const bookingSlot =
+      booking.selectedSlot ||
+      (selectedPlan.plan === 'library_access' ? selectedSlot : 'full_day');
+
+    if (selectedPlan.plan === 'library_access' && !bookingSlot) {
+      toast.error('Select morning or evening slot first');
+      return;
+    }
+
     try {
       setIsBooking(true);
+      bookingCooldown.startCooldown();
 
       const response = await reserveSeat({
         seatId: selectedSeat._id,
         duration: 300,
+        plan: booking.selectedPlan?.plan || selectedPlan.plan,
+        slot: bookingSlot,
       });
 
       if (!response?.success)
@@ -238,6 +317,7 @@ export default function BookSeatPage() {
         state: {
           selectedPlan: booking.selectedPlan,
           lockerSelected: booking.lockerSelected || false,
+          selectedSlot: bookingSlot,
           reservation: response.data?.reservation,
           seat: response.data?.seat || selectedSeat,
           reservedUntil: response.data?.reservedUntil,
@@ -257,7 +337,7 @@ export default function BookSeatPage() {
     } finally {
       setIsBooking(false);
     }
-  }, [selectedSeat, fetchSeats, navigate]);
+  }, [selectedSeat, selectedPlan, selectedSlot, fetchSeats, navigate, bookingCooldown]);
 
   // Show loading state
   if (loading) {
@@ -306,6 +386,37 @@ export default function BookSeatPage() {
           )}
         </div>
 
+        <div className='mb-6 border border-slate-200 bg-white px-4 py-4 sm:px-5'>
+          <PackageSelector
+            selectedPlan={selectedPlan}
+            onChange={handlePlanChange}
+          />
+
+          <div className='grid gap-4 sm:grid-cols-3 sm:divide-x sm:divide-slate-200'>
+            <PackageGuideItem
+              title='General Seats'
+              detail='Seats 66 to 75 | Morning or evening'
+              price='Rs. 1,000/slot/month'
+              color='bg-emerald-600'
+            />
+            <PackageGuideItem
+              title='Reserved Seats'
+              detail='Seats 1 to 65'
+              price='Rs. 1,500/month'
+              color='bg-[#11182B]'
+            />
+            <PackageGuideItem
+              title='Optional Locker'
+              detail='General: rent + security'
+              price='Reserved: security only'
+              color='bg-amber-500'
+            />
+          </div>
+          <p className='mt-3 border-t border-slate-100 pt-3 text-[12.5px] font-medium text-slate-600'>
+            Selected package: {selectedPlan.name}. Only seats included in this package can be selected.
+          </p>
+        </div>
+
         <div className='grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6'>
           <section className='bg-white rounded-2xl border border-slate-200 p-4 sm:p-8 overflow-x-auto'>
             {seats.length === 0 ? (
@@ -331,10 +442,16 @@ export default function BookSeatPage() {
           <aside className='hidden lg:block'>
             <div className='sticky top-6'>
               <BookingSummary
-                seat={selectedSeat}
-                onCancel={() => setSelectedSeatId(null)}
+                seat={selectedSeat}
+                selectedPlan={selectedPlan}
+                selectedSlot={selectedSlot}
+                onSlotChange={setSelectedSlot}
+                onCancel={() => {
+                  setSelectedSeatId(null);
+                  setSelectedSlot(null);
+                }}
                 onConfirm={handleConfirmBooking}
-                isBooking={isBooking}
+                isBooking={isBooking || bookingCooldown.isCoolingDown}
               />
             </div>
           </aside>
@@ -343,10 +460,16 @@ export default function BookSeatPage() {
         {/* Mobile/tablet summary */}
         <div className='lg:hidden mt-6'>
           <BookingSummary
-            seat={selectedSeat}
-            onCancel={() => setSelectedSeatId(null)}
+            seat={selectedSeat}
+            selectedPlan={selectedPlan}
+            selectedSlot={selectedSlot}
+            onSlotChange={setSelectedSlot}
+            onCancel={() => {
+              setSelectedSeatId(null);
+              setSelectedSlot(null);
+            }}
             onConfirm={handleConfirmBooking}
-            isBooking={isBooking}
+            isBooking={isBooking || bookingCooldown.isCoolingDown}
           />
         </div>
       </main>
@@ -406,6 +529,61 @@ function Stat({ label, value, valueClass = 'text-slate-900' }) {
   );
 }
 
+function PackageGuideItem({ title, detail, price, color }) {
+  return (
+    <div className='flex items-start gap-3 sm:px-4 first:pl-0'>
+      <span className={`mt-1 h-3 w-3 shrink-0 rounded-sm ${color}`} />
+      <div>
+        <p className='text-[13px] font-semibold text-slate-900'>{title}</p>
+        <p className='text-[12px] text-slate-500'>{detail}</p>
+        <p className='mt-0.5 text-[13px] font-semibold text-slate-700'>{price}</p>
+      </div>
+    </div>
+  );
+}
+
+function PackageSelector({ selectedPlan, onChange }) {
+  return (
+    <div className='mb-4 border-b border-slate-100 pb-4'>
+      <p className='mb-2 text-[12px] font-semibold text-slate-600'>
+        Choose seat type
+      </p>
+      <div
+        className='grid grid-cols-2 rounded-lg bg-slate-100 p-1'
+        role='group'
+        aria-label='Choose seat package'
+      >
+        {PLANS.map((plan) => {
+          const isSelected = selectedPlan.plan === plan.plan;
+          return (
+            <button
+              key={plan.id}
+              type='button'
+              onClick={() => onChange(plan)}
+              aria-pressed={isSelected}
+              className={`min-h-12 px-3 py-2 text-[13px] font-semibold transition-colors ${
+                isSelected
+                  ? 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <span className='block'>
+                {plan.plan === 'library_access'
+                  ? 'General Seats'
+                  : 'Reserved Seats'}
+              </span>
+              <span className='block text-[11px] font-medium'>
+                {plan.allowedSeatRange[0]}-{plan.allowedSeatRange[1]} | Rs.{' '}
+                {plan.price.toLocaleString('en-IN')}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ================= LIBRARY MAP =================
 function LibraryMap({ seatMap, selectedSeatId, onSelectSeat }) {
   console.log('ðŸ” LibraryMap - seatMap size:', seatMap.size);
@@ -456,7 +634,7 @@ function SectionLabel({ sectionId }) {
         style={{ backgroundColor: section?.color }}
       />
       <span className='text-[12px] font-medium text-slate-500'>
-        {section?.name} Â· seats {section?.range[0]}â€“{section?.range[1]}
+        {section?.name}: {section?.range[0]} to {section?.range[1]}
       </span>
     </div>
   );
@@ -603,6 +781,8 @@ function SeatCell({ n, seatMap, selectedSeatId, onSelectSeat }) {
         seat={seat}
         isSelected={seat._id === selectedSeatId}
         onSelect={onSelectSeat}
+        femaleOnly={n >= 1 && n <= 10}
+        unavailableForPlan={seat.unavailableForPlan}
       />
     </div>
   );

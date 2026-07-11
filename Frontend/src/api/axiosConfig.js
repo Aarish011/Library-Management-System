@@ -1,9 +1,40 @@
-﻿import axios from 'axios';
+import axios from 'axios';
+import { getUserFriendlyError } from '../utils/errorMessages';
 
-const API_URL =
-  import.meta.env.VITE_API_BASE_URL ||
-  import.meta.env.VITE_API_URL ||
-  'http://localhost:5000/api';
+function resolveApiUrl() {
+  const configuredUrl =
+    import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '';
+
+  if (typeof window === 'undefined') {
+    return configuredUrl || 'http://localhost:5000/api';
+  }
+
+  const hostname = window.location.hostname;
+  const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
+
+  if (configuredUrl && (isLocalhost || !configuredUrl.includes('localhost'))) {
+    return configuredUrl;
+  }
+
+  return `${window.location.protocol}//${hostname}:5000/api`;
+}
+
+const API_URL = resolveApiUrl();
+let sessionExpiryHandled = false;
+
+function isPublicAuthRequest(requestUrl) {
+  return [
+    '/auth/login',
+    '/auth/register',
+    '/auth/forgot-password',
+    '/auth/reset-password',
+  ].some((path) => requestUrl.includes(path));
+}
+
+function clearStoredSession() {
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
+}
 
 console.log('API base URL:', API_URL);
 
@@ -37,19 +68,38 @@ axiosInstance.interceptors.response.use(
       ? authHeader.slice(7)
       : null;
 
-    if (status === 401) {
-      console.warn('Unauthorized API response:', requestUrl, error.response?.data);
+    if (status === 401 && !isPublicAuthRequest(requestUrl)) {
+      console.warn(
+        'Unauthorized API response:',
+        requestUrl,
+        error.response?.data
+      );
 
-      const isAuthCheck = requestUrl.includes('/auth/me');
       const isLoginPage = window.location.pathname === '/login';
-      const tokenStillMatchesRequest = requestToken && currentToken === requestToken;
+      const tokenStillMatchesRequest =
+        requestToken && currentToken === requestToken;
 
-      if (isAuthCheck && tokenStillMatchesRequest && !isLoginPage) {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
+      if ((tokenStillMatchesRequest || currentToken) && !sessionExpiryHandled) {
+        sessionExpiryHandled = true;
+        clearStoredSession();
+        window.dispatchEvent(new Event('bookshelf:session-expired'));
+      }
+
+      if (!isLoginPage && sessionExpiryHandled) {
         window.location.replace('/login');
       }
     }
+
+    const friendlyMessage = getUserFriendlyError(error);
+    if (error.response) {
+      error.response.data = {
+        ...(typeof error.response.data === 'object'
+          ? error.response.data
+          : {}),
+        message: friendlyMessage,
+      };
+    }
+    error.message = friendlyMessage;
 
     return Promise.reject(error);
   }

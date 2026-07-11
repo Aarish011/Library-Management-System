@@ -2,8 +2,14 @@
 const Seat = require('../models/Seats');
 const Subscription = require('../models/Subscription');
 const Payment = require('../models/Payment');
+const Reservation = require('../models/Reservation');
 const Notification = require('../models/Notification');
-const { activateSubscriptionForUser } = require('../services/subscriptionService');
+const Alumni = require('../models/Alumni');
+const mongoose = require('mongoose');
+const {
+  activateSubscriptionForUser,
+  renewSubscriptionForUser,
+} = require('../services/subscriptionService');
 const { uploadBuffer } = require('../config/cloudinary');
 
 function startOfMonth(date = new Date()) {
@@ -84,9 +90,22 @@ exports.getDashboardStats = async (req, res) => {
 
 exports.getStudents = async (req, res) => {
   try {
-    const filter = { role: 'student' };
+    const filter = { role: 'student', isArchived: { $ne: true } };
+    const preparationValues = ['UPSC', 'JEE', 'GATE', 'NEET', 'CAT', 'Banking', 'SSC', 'Other'];
+    const preparationLookup = preparationValues.reduce((lookup, value) => {
+      lookup[value.toLowerCase()] = value;
+      return lookup;
+    }, {});
+
     if (req.query.status === 'active') filter.isActive = true;
     if (req.query.status === 'inactive') filter.isActive = false;
+    if (req.query.preparation) {
+      const preparation = preparationLookup[String(req.query.preparation).toLowerCase()];
+      if (!preparation) {
+        return res.status(400).json({ success: false, message: 'Please select a valid preparation type' });
+      }
+      filter.preparation = preparation;
+    }
     if (req.query.search) {
       filter.$or = [
         { name: new RegExp(req.query.search, 'i') },
@@ -104,7 +123,11 @@ exports.getStudents = async (req, res) => {
 
 exports.getStudentDetails = async (req, res) => {
   try {
-    const student = await User.findOne({ _id: req.params.studentId, role: 'student' }).select('-password');
+    const student = await User.findOne({
+      _id: req.params.studentId,
+      role: 'student',
+      isArchived: { $ne: true },
+    }).select('-password');
     if (!student) return res.status(404).json({ success: false, message: 'Student not found' });
 
     const [subscription, payments] = await Promise.all([
@@ -127,7 +150,11 @@ exports.updateStudent = async (req, res) => {
     });
 
     const student = await User.findOneAndUpdate(
-      { _id: req.params.studentId, role: 'student' },
+      {
+        _id: req.params.studentId,
+        role: 'student',
+        isArchived: { $ne: true },
+      },
       updates,
       { new: true, runValidators: true }
     ).select('-password');
@@ -140,15 +167,172 @@ exports.updateStudent = async (req, res) => {
 };
 
 exports.deleteStudent = async (req, res) => {
-  try {
-    const student = await User.findOneAndUpdate(
-      { _id: req.params.studentId, role: 'student' },
-      { isActive: false },
-      { new: true }
-    ).select('-password');
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
-    if (!student) return res.status(404).json({ success: false, message: 'Student not found' });
-    res.json({ success: true, message: 'Student deactivated', data: student });
+  try {
+    const student = await User.findOne({
+      _id: req.params.studentId,
+      role: 'student',
+      isArchived: { $ne: true },
+    })
+      .select('-password')
+      .session(session);
+
+    if (!student) {
+      await session.abortTransaction();
+      return res.status(404).json({ success: false, message: 'Student not found' });
+    }
+
+    const [subscriptions, payments, reservations] = await Promise.all([
+      Subscription.find({ user: student._id })
+        .populate('seat', 'seatNumber zone status')
+        .session(session)
+        .lean(),
+      Payment.find({ user: student._id })
+        .select('-razorpaySignature')
+        .session(session)
+        .lean(),
+      Reservation.find({ user: student._id })
+        .populate('seat', 'seatNumber zone status')
+        .session(session)
+        .lean(),
+    ]);
+
+    const [alumni] = await Alumni.create(
+      [
+        {
+          originalUser: student._id,
+          profile: {
+            name: student.name,
+            email: student.email,
+            phone: student.phone,
+            gender: student.gender,
+            preparation: student.preparation,
+            profilePicture: student.profilePicture,
+            lastLogin: student.lastLogin,
+            joinedAt: student.createdAt,
+            lastProfileUpdate: student.updatedAt,
+          },
+          subscriptions,
+          payments,
+          reservations,
+          archivedBy: req.user._id,
+          archivedAt: new Date(),
+        },
+      ],
+      { session }
+    );
+
+    await Subscription.updateMany(
+      { user: student._id, status: { $in: ['active', 'pending'] } },
+      { status: 'cancelled' },
+      { session }
+    );
+
+    await Reservation.updateMany(
+      { user: student._id, status: { $in: ['active', 'confirmed'] } },
+      { status: 'cancelled' },
+      { session }
+    );
+
+    await Seat.updateMany(
+      { heldBy: student._id },
+      {
+        status: 'available',
+        heldBy: null,
+        holdExpiresAt: null,
+      },
+      { session }
+    );
+
+    student.isActive = false;
+    student.isArchived = true;
+    student.archivedAt = alumni.archivedAt;
+    await student.save({ session });
+
+    await session.commitTransaction();
+
+    const io = req.app.get('io') || global.io;
+    if (io) {
+      io.emit('seat:released', {
+        userId: student._id,
+        reason: 'student_archived',
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Student moved to alumni',
+      data: alumni,
+    });
+  } catch (error) {
+    await session.abortTransaction();
+    const status = error.code === 11000 ? 409 : 500;
+    res.status(status).json({
+      success: false,
+      message:
+        error.code === 11000
+          ? 'Student is already in alumni'
+          : error.message,
+    });
+  } finally {
+    session.endSession();
+  }
+};
+
+exports.getAlumni = async (req, res) => {
+  try {
+    const filter = {};
+    if (req.query.search) {
+      const search = new RegExp(req.query.search, 'i');
+      filter.$or = [
+        { 'profile.name': search },
+        { 'profile.email': search },
+        { 'profile.phone': search },
+      ];
+    }
+
+    const alumni = await Alumni.aggregate([
+      { $match: filter },
+      { $sort: { archivedAt: -1 } },
+      { $limit: 250 },
+      {
+        $project: {
+          profile: 1,
+          archivedAt: 1,
+          subscriptionCount: {
+            $size: { $ifNull: ['$subscriptions', []] },
+          },
+          paymentCount: {
+            $size: { $ifNull: ['$payments', []] },
+          },
+          reservationCount: {
+            $size: { $ifNull: ['$reservations', []] },
+          },
+        },
+      },
+    ]);
+
+    res.json({ success: true, data: alumni });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+exports.getAlumniDetails = async (req, res) => {
+  try {
+    const alumni = await Alumni.findById(req.params.alumniId)
+      .populate('archivedBy', 'name email');
+
+    if (!alumni) {
+      return res.status(404).json({
+        success: false,
+        message: 'Alumni record not found',
+      });
+    }
+
+    res.json({ success: true, data: alumni });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -194,8 +378,50 @@ exports.deleteSeat = async (req, res) => {
 
 exports.getPayments = async (req, res) => {
   try {
-    const payments = await Payment.find().populate('user', 'name email phone').populate('subscription', 'plan status endDate').sort({ createdAt: -1 }).limit(250);
-    res.json({ success: true, data: payments });
+    const payments = await Payment.find()
+      .populate('user', 'name email phone')
+      .populate('subscription', 'plan status endDate')
+      .populate('reservation', 'status reservedUntil')
+      .sort({ createdAt: -1 })
+      .limit(250);
+
+    const now = new Date();
+    const expiredReservationIds = payments
+      .filter(
+        (payment) =>
+          payment.status === 'pending' &&
+          payment.reservation &&
+          (payment.reservation.status === 'expired' ||
+            (payment.reservation.status === 'active' &&
+              payment.reservation.reservedUntil <= now))
+      )
+      .map((payment) => payment.reservation._id);
+
+    if (expiredReservationIds.length > 0) {
+      await Payment.updateMany(
+        {
+          status: 'pending',
+          reservation: { $in: expiredReservationIds },
+        },
+        {
+          status: 'failed',
+          failureReason: 'Seat hold expired before payment',
+          verifiedAt: now,
+        }
+      );
+    }
+
+    const refreshedPayments =
+      expiredReservationIds.length > 0
+        ? await Payment.find()
+            .populate('user', 'name email phone')
+            .populate('subscription', 'plan status endDate')
+            .populate('reservation', 'status reservedUntil')
+            .sort({ createdAt: -1 })
+            .limit(250)
+        : payments;
+
+    res.json({ success: true, data: refreshedPayments });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -213,10 +439,47 @@ exports.getPaymentDetails = async (req, res) => {
 
 exports.confirmDeskPayment = async (req, res) => {
   try {
-    const payment = await Payment.findOne({ _id: req.params.paymentId, paymentMethod: 'pay_on_desk', status: 'pending' });
+    const payment = await Payment.findOne({ _id: req.params.paymentId, paymentMethod: 'pay_on_desk', status: 'pending' })
+      .populate('reservation', 'status reservedUntil');
     if (!payment) return res.status(404).json({ success: false, message: 'Pending desk payment not found' });
 
-    const subscriptionData = await activateSubscriptionForUser(payment.user, payment.plan, { lockerSelected: payment.lockerSelected });
+    if (
+      payment.reservation &&
+      (payment.reservation.status === 'expired' ||
+        (payment.reservation.status === 'active' &&
+          payment.reservation.reservedUntil <= new Date()))
+    ) {
+      payment.status = 'failed';
+      payment.failureReason = 'Seat hold expired before payment';
+      payment.verifiedAt = new Date();
+      await payment.save();
+
+      return res.status(409).json({
+        success: false,
+        message: 'Seat hold expired before payment. Ask the student to select the seat again.',
+      });
+    }
+
+    const subscriptionData = payment.subscription
+      ? await renewSubscriptionForUser(
+          payment.user,
+          payment.subscription,
+          payment.plan,
+          {
+            lockerSelected: payment.lockerSelected,
+            slot: payment.slot,
+            actorId: req.user._id,
+          }
+        )
+      : await activateSubscriptionForUser(
+          payment.user,
+          payment.plan,
+          {
+            lockerSelected: payment.lockerSelected,
+            slot: payment.slot,
+            actorId: req.user._id,
+          }
+        );
     payment.status = 'paid';
     payment.subscription = subscriptionData.subscription._id;
     payment.verifiedBy = req.user._id;
@@ -249,11 +512,131 @@ exports.getSubscriptionDetails = async (req, res) => {
   }
 };
 
+exports.getRenewalsDue = async (req, res) => {
+  try {
+    const now = new Date();
+    const dueBefore = new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000);
+
+    const subscriptions = await Subscription.aggregate([
+      {
+        $match: {
+          status: { $in: ['active', 'expired'] },
+        },
+      },
+      { $sort: { user: 1, endDate: -1, createdAt: -1 } },
+      {
+        $group: {
+          _id: '$user',
+          subscription: { $first: '$$ROOT' },
+        },
+      },
+      { $replaceRoot: { newRoot: '$subscription' } },
+      { $match: { endDate: { $lte: dueBefore } } },
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'user',
+          foreignField: '_id',
+          as: 'user',
+        },
+      },
+      { $unwind: '$user' },
+      {
+        $match: {
+          'user.role': 'student',
+          'user.isActive': true,
+          'user.isArchived': { $ne: true },
+        },
+      },
+      {
+        $lookup: {
+          from: 'seats',
+          localField: 'seat',
+          foreignField: '_id',
+          as: 'seat',
+        },
+      },
+      {
+        $unwind: {
+          path: '$seat',
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $project: {
+          plan: 1,
+          startDate: 1,
+          endDate: 1,
+          status: 1,
+          amount: 1,
+          lockerSelected: 1,
+          lockerDeposit: 1,
+          'user._id': 1,
+          'user.name': 1,
+          'user.email': 1,
+          'user.phone': 1,
+          'user.gender': 1,
+          'user.preparation': 1,
+          'user.profilePicture': 1,
+          'seat._id': 1,
+          'seat.seatNumber': 1,
+          'seat.zone': 1,
+        },
+      },
+      { $sort: { endDate: 1 } },
+    ]);
+
+    const renewals = subscriptions.map((subscription) => {
+        const millisecondsRemaining =
+          new Date(subscription.endDate).getTime() - now.getTime();
+        return {
+          ...subscription,
+          hoursRemaining: Math.ceil(
+            millisecondsRemaining / (60 * 60 * 1000)
+          ),
+          isOverdue: millisecondsRemaining < 0,
+        };
+      });
+
+    res.json({
+      success: true,
+      data: renewals,
+      meta: {
+        count: renewals.length,
+        overdue: renewals.filter((renewal) => renewal.isOverdue).length,
+        windowStartsAt: now,
+        windowEndsAt: dueBefore,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to load renewals due',
+    });
+  }
+};
+
 exports.sendNotification = async (req, res) => {
   try {
-    const { userId, title, message, type = 'info', actionUrl = null } = req.body;
-    if (!title || !message) {
+    const { userId, title, message, type = 'info' } = req.body;
+    const cleanTitle = String(title || '').trim();
+    const cleanMessage = String(message || '').trim();
+
+    if (!cleanTitle || !cleanMessage) {
       return res.status(400).json({ success: false, message: 'Title and message are required' });
+    }
+    if (cleanTitle.length > 100 || cleanMessage.length > 1000) {
+      return res.status(400).json({
+        success: false,
+        message: 'Title must be 100 characters or fewer and message must be 1000 characters or fewer',
+      });
+    }
+    if (userId && !mongoose.isValidObjectId(userId)) {
+      return res.status(400).json({ success: false, message: 'Invalid student ID' });
+    }
+
+    if (!['info', 'warning', 'success', 'error', 'renewal'].includes(type)) {
+      return res.status(400).json({ success: false, message: 'Invalid notification type' });
     }
 
     let bannerUrl = req.body.bannerUrl || null;
@@ -263,11 +646,12 @@ exports.sendNotification = async (req, res) => {
     }
 
     const payload = {
-      title: String(title).trim(),
-      message: String(message).trim(),
+      title: cleanTitle,
+      message: cleanMessage,
       type,
-      actionUrl: actionUrl || null,
       bannerUrl,
+      createdBy: req.user._id,
+      audience: userId ? 'single' : 'all',
     };
 
     const broadcastKey = [
@@ -275,13 +659,27 @@ exports.sendNotification = async (req, res) => {
       payload.title,
       payload.message,
       payload.type,
-      payload.actionUrl || '',
       payload.bannerUrl || '',
     ].join('|').toLowerCase();
 
-    const targets = userId
-      ? [{ _id: userId }]
-      : await User.find({ role: 'student', isActive: true }).select('_id');
+    let targets;
+    if (userId) {
+      const student = await User.findOne({
+        _id: userId,
+        role: 'student',
+        isActive: true,
+      }).select('_id');
+
+      if (!student) {
+        return res.status(404).json({
+          success: false,
+          message: 'Active student not found',
+        });
+      }
+      targets = [student];
+    } else {
+      targets = await User.find({ role: 'student', isActive: true }).select('_id');
+    }
 
     const created = [];
     const skipped = [];
@@ -324,6 +722,41 @@ exports.sendNotification = async (req, res) => {
       return res.status(409).json({ success: false, message: 'Duplicate notification skipped' });
     }
     res.status(error.statusCode || 500).json({ success: false, message: error.message });
+  }
+};
+
+exports.getNotificationHistory = async (req, res) => {
+  try {
+    const history = await Notification.aggregate([
+      {
+        $match: {
+          broadcastKey: { $exists: true, $ne: null },
+        },
+      },
+      { $sort: { createdAt: -1 } },
+      {
+        $group: {
+          _id: '$broadcastKey',
+          title: { $first: '$title' },
+          message: { $first: '$message' },
+          type: { $first: '$type' },
+          bannerUrl: { $first: '$bannerUrl' },
+          audience: { $first: '$audience' },
+          createdAt: { $first: '$createdAt' },
+          recipients: { $sum: 1 },
+          readCount: { $sum: { $cond: ['$isRead', 1, 0] } },
+        },
+      },
+      { $sort: { createdAt: -1 } },
+      { $limit: 50 },
+    ]);
+
+    res.json({ success: true, data: history });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to load notification history',
+    });
   }
 };
 

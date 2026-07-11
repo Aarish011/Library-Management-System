@@ -2,8 +2,11 @@ const User = require('../models/User');
 const { generateToken } = require('../utils/jwt');
 const { validationResult } = require('express-validator');
 const { uploadBuffer } = require('../config/cloudinary');
+const crypto = require('crypto');
+const { sendPasswordResetEmail } = require('../services/emailService');
+const { verifyFirebaseIdToken } = require('../services/firebaseAdminService');
 
-const editableProfileFields = ['name', 'phone', 'gender', 'preparation'];
+const editableProfileFields = ['name', 'phone', 'preparation'];
 
 // Register
 exports.register = async (req, res) => {
@@ -16,13 +19,50 @@ exports.register = async (req, res) => {
       });
     }
 
-    const { name, email, phone, password, gender, preparation } = req.body;
+    const {
+      name,
+      email,
+      phone,
+      password,
+      gender,
+      preparation,
+      firebaseIdToken,
+    } = req.body;
+
+    let decodedToken;
+    try {
+      decodedToken = await verifyFirebaseIdToken(firebaseIdToken);
+    } catch (firebaseError) {
+      console.error('Register phone verification error:', firebaseError);
+      const reason = getFirebaseVerificationMessage(firebaseError);
+      return res.status(400).json({
+        success: false,
+        message: reason,
+      });
+    }
+
+    const verifiedPhone = normalizeIndianPhone(decodedToken.phone_number);
+
+    if (!verifiedPhone || verifiedPhone !== normalizeIndianPhone(phone)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Please verify this phone number before registration',
+      });
+    }
 
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(400).json({
         success: false,
         message: 'Email already registered',
+      });
+    }
+
+    const existingPhone = await User.findOne({ phone });
+    if (existingPhone) {
+      return res.status(400).json({
+        success: false,
+        message: 'Phone number already registered',
       });
     }
 
@@ -242,25 +282,133 @@ exports.changePassword = async (req, res) => {
 // Forgot password
 exports.forgotPassword = async (req, res) => {
   try {
-    const { email } = req.body;
-    const user = await User.findOne({ email });
+    const email = String(req.body.email || '').trim().toLowerCase();
+    const publicMessage =
+      'If an account exists for this email, a password reset link has been sent.';
 
-    if (!user) {
-      return res.status(404).json({
+    if (!email) {
+      return res.status(400).json({
         success: false,
-        message: 'User not found',
+        message: 'Email is required',
       });
+    }
+
+    const user = await User.findOne({ email }).select(
+      '+passwordResetToken +passwordResetExpires'
+    );
+
+    if (user) {
+      const resetToken = crypto.randomBytes(32).toString('hex');
+      const hashedToken = crypto
+        .createHash('sha256')
+        .update(resetToken)
+        .digest('hex');
+
+      user.passwordResetToken = hashedToken;
+      user.passwordResetExpires = new Date(Date.now() + 15 * 60 * 1000);
+      await user.save({ validateBeforeSave: false });
+
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+      const resetUrl = `${frontendUrl.replace(/\/$/, '')}/reset-password/${resetToken}`;
+
+      try {
+        await sendPasswordResetEmail({
+          to: user.email,
+          name: user.name,
+          resetUrl,
+        });
+      } catch (deliveryError) {
+        user.passwordResetToken = null;
+        user.passwordResetExpires = null;
+        await user.save({ validateBeforeSave: false });
+        console.error('Password reset delivery error:', deliveryError);
+        return res.status(500).json({
+          success: false,
+          message:
+            'Could not send the reset email right now. Please try again later.',
+        });
+      }
     }
 
     res.json({
       success: true,
-      message: 'Password reset link sent to email',
+      message: publicMessage,
     });
   } catch (error) {
     console.error('Forgot password error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to send reset link',
+    });
+  }
+};
+
+function normalizeIndianPhone(phone) {
+  const digits = String(phone || '').replace(/\D/g, '').slice(-10);
+  return digits;
+}
+
+function getFirebaseVerificationMessage(error) {
+  const code = error?.code || '';
+
+  if (code.includes('id-token-expired')) {
+    return 'Phone verification expired. Please request a new OTP and verify again.';
+  }
+
+  if (code.includes('argument-error') || code.includes('invalid')) {
+    return 'Phone verification token is invalid. Please verify your phone number again.';
+  }
+
+  if (process.env.NODE_ENV !== 'production' && code) {
+    return `Phone verification failed (${code}). Please verify your phone number again.`;
+  }
+
+  return 'Phone verification failed. Please verify your phone number again.';
+}
+
+exports.resetPassword = async (req, res) => {
+  try {
+    const { token } = req.params;
+    const { password } = req.body;
+
+    if (!password || password.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must be at least 6 characters',
+      });
+    }
+
+    const hashedToken = crypto
+      .createHash('sha256')
+      .update(token)
+      .digest('hex');
+
+    const user = await User.findOne({
+      passwordResetToken: hashedToken,
+      passwordResetExpires: { $gt: Date.now() },
+    }).select('+password +passwordResetToken +passwordResetExpires');
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password reset link is invalid or has expired',
+      });
+    }
+
+    user.password = password;
+    user.passwordResetToken = null;
+    user.passwordResetExpires = null;
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'Password reset successfully. You can now log in.',
+    });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to reset password',
     });
   }
 };

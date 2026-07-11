@@ -4,11 +4,14 @@ import { useAuth } from '../../hooks/useAuth';
 import { login as loginApi } from '../../api/authApi';
 import toast from 'react-hot-toast';
 import { FaSpinner } from 'react-icons/fa';
+import useActionCooldown from '../../hooks/useActionCooldown';
 
 const Login = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
+  const emailLoginCooldown = useActionCooldown(3000);
   const [loading, setLoading] = useState(false);
+  const [authError, setAuthError] = useState('');
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -26,6 +29,14 @@ const Login = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    if (
+      !emailLoginCooldown.guard((seconds) =>
+        toast.error(`Please wait ${seconds}s before trying again`)
+      )
+    ) {
+      return;
+    }
+
     // Basic validation
     if (!formData.email) {
       setErrors({ email: 'Email is required' });
@@ -37,6 +48,8 @@ const Login = () => {
     }
 
     setLoading(true);
+    setAuthError('');
+    emailLoginCooldown.startCooldown();
     try {
       const response = await loginApi({
         email: formData.email,
@@ -49,21 +62,29 @@ const Login = () => {
         navigate('/dashboard');
       }
     } catch (error) {
-      toast.error(error.message || 'Login failed');
+      const message = error.message || 'Login failed';
+      setAuthError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className='min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 py-12 px-4 sm:px-6 lg:px-8'>
-      <div className='max-w-md w-full bg-white rounded-xl shadow-lg p-8'>
-        <div className='text-center mb-8'>
-          <h2 className='text-3xl font-bold text-gray-800'>Welcome Back</h2>
+    <div className='min-h-screen flex items-start sm:items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 py-6 px-3 sm:py-12 sm:px-6 lg:px-8'>
+      <div className='max-w-md w-full bg-white rounded-xl shadow-lg p-5 sm:p-8'>
+        <div className='text-center mb-6 sm:mb-8'>
+          <h2 className='text-2xl sm:text-3xl font-bold text-gray-800'>Welcome Back</h2>
           <p className='text-gray-500 mt-2'>Login to your account</p>
         </div>
 
         <form onSubmit={handleSubmit} className='space-y-5'>
+          {authError && (
+            <div className='rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700'>
+              {authError}
+            </div>
+          )}
+
           {/* Email */}
           <div>
             <label className='block text-sm font-medium text-gray-700 mb-1'>
@@ -117,7 +138,7 @@ const Login = () => {
           {/* Submit Button */}
           <button
             type='submit'
-            disabled={loading}
+            disabled={loading || emailLoginCooldown.isCoolingDown}
             className='w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center'
           >
             {loading ? (
@@ -126,7 +147,9 @@ const Login = () => {
                 Logging in...
               </>
             ) : (
-              'Login'
+              emailLoginCooldown.isCoolingDown
+                ? `Wait ${emailLoginCooldown.remainingSeconds}s`
+                : 'Login'
             )}
           </button>
         </form>

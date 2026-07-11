@@ -13,7 +13,7 @@ const HomePage = () => {
       return;
     }
 
-    navigate('/seats');
+    navigate('/book-seat');
   };
 
   return (

@@ -1,16 +1,22 @@
 ﻿import { useState } from 'react';
-import { LOCKER_DEPOSIT, computePrice, getPlan } from '../../utils/plansConfig';
-
-const RESERVED_SEAT_PLAN = getPlan('reserved_seat');
+import {
+  LOCKER_DEPOSIT,
+  LOCKER_RENT,
+  computePrice,
+} from '../../utils/plansConfig';
 
 export default function BookingSummary({
   seat,
   onCancel,
   onConfirm,
   isBooking,
+  selectedPlan,
+  selectedSlot,
+  onSlotChange,
 }) {
   const [lockerSelected, setLockerSelected] = useState(false);
-  const totalAmount = computePrice(RESERVED_SEAT_PLAN, lockerSelected);
+  const totalAmount = computePrice(selectedPlan, lockerSelected);
+  const hasLockerRent = selectedPlan.plan === 'library_access';
 
   const startDate = new Date().toLocaleDateString('en-IN', {
     day: 'numeric',
@@ -47,14 +53,62 @@ export default function BookingSummary({
           valueClass='text-emerald-600 font-medium'
         />
         <Row label='Start date' value={startDate} />
+        {selectedPlan.plan === 'library_access' && (
+          <Row
+            label='Selected slot'
+            value={formatSlot(selectedSlot) || 'Choose a slot'}
+            valueClass={
+              selectedSlot
+                ? 'text-emerald-600 font-medium'
+                : 'text-red-600 font-medium'
+            }
+          />
+        )}
       </dl>
+
+      {selectedPlan.plan === 'library_access' && (
+        <div className='mb-5 rounded-xl border border-slate-200 p-3'>
+          <p className='mb-2 text-[13px] font-semibold text-slate-900'>
+            Seat slot
+          </p>
+          <div className='grid grid-cols-2 gap-2'>
+            {['morning', 'evening'].map((slot) => {
+              const status = seat.slotAvailability?.[slot] || 'available';
+              const available = status === 'available';
+              const active = selectedSlot === slot;
+              return (
+                <button
+                  key={slot}
+                  type='button'
+                  disabled={!available || isBooking}
+                  onClick={() => onSlotChange(slot)}
+                  className={`rounded-lg border px-3 py-2 text-left text-[12.5px] transition ${
+                    active
+                      ? 'border-[#11182B] bg-[#11182B] text-white'
+                      : available
+                        ? 'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                        : 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'
+                  }`}
+                >
+                  <span className='block font-semibold'>{formatSlot(slot)}</span>
+                  <span className='block text-[11px]'>
+                    {available ? 'Available' : 'Booked'}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className='mb-5 rounded-xl border border-amber-200 bg-amber-50 p-4'>
         <p className='text-[13px] font-semibold text-amber-900'>
-          {RESERVED_SEAT_PLAN.name}
+          {selectedPlan.name}
         </p>
         <p className='mt-1 text-[12.5px] text-amber-800'>
-          The Rs. 1500 package reserves your selected seat after payment.
+          {selectedPlan.plan === 'library_access'
+            ? 'General seat package: choose one seat from 66 to 75.'
+            : 'Reserved seat package: choose one seat from 1 to 65.'}
         </p>
       </div>
 
@@ -67,18 +121,23 @@ export default function BookingSummary({
         />
         <span className='min-w-0'>
           <span className='block text-[13px] font-medium text-slate-900'>
-            Add locker deposit
+            Add locker
           </span>
           <span className='block text-[12.5px] text-slate-500'>
-            Optional refundable locker fee: Rs. {LOCKER_DEPOSIT.toLocaleString('en-IN')}.
+            {hasLockerRent
+              ? `Rs. ${LOCKER_RENT.toLocaleString('en-IN')}/month rent + refundable Rs. ${LOCKER_DEPOSIT.toLocaleString('en-IN')} security.`
+              : `Refundable Rs. ${LOCKER_DEPOSIT.toLocaleString('en-IN')} security only. No monthly locker rent for reserved seats.`}
           </span>
         </span>
       </label>
 
       <div className='border-t border-slate-100 pt-4 mb-5 space-y-1.5'>
-        <Row label='Library + reserved seat' value={`Rs. ${RESERVED_SEAT_PLAN.price.toLocaleString('en-IN')}`} />
-        <Row label='Locker deposit' value={lockerSelected ? `Rs. ${LOCKER_DEPOSIT.toLocaleString('en-IN')}` : 'Not selected'} />
-        <Row label='Plan duration' value={`${RESERVED_SEAT_PLAN.duration} days`} />
+        <Row label='Monthly library fee' value={`Rs. ${selectedPlan.price.toLocaleString('en-IN')}`} />
+        {hasLockerRent && (
+          <Row label='Locker rent' value={lockerSelected ? `Rs. ${LOCKER_RENT.toLocaleString('en-IN')}` : 'Not selected'} />
+        )}
+        <Row label='Locker security' value={lockerSelected ? `Rs. ${LOCKER_DEPOSIT.toLocaleString('en-IN')}` : 'Not selected'} />
+        <Row label='Plan duration' value={`${selectedPlan.duration} days`} />
         <div className='flex justify-between items-baseline pt-1'>
           <span className='text-[14px] font-medium text-slate-900'>
             Total amount
@@ -100,8 +159,10 @@ export default function BookingSummary({
         </button>
         <button
           type='button'
-          onClick={() => onConfirm({ selectedPlan: RESERVED_SEAT_PLAN, lockerSelected })}
-          disabled={isBooking}
+          onClick={() => onConfirm({ selectedPlan, lockerSelected, selectedSlot })}
+          disabled={
+            isBooking || (selectedPlan.plan === 'library_access' && !selectedSlot)
+          }
           className='flex-1 py-2.5 rounded-lg bg-[#11182B] text-white text-[14px] font-medium hover:bg-[#1B2540] transition-colors disabled:opacity-60 flex items-center justify-center gap-2'
         >
           {isBooking ? (
@@ -124,6 +185,12 @@ function Row({ label, value, valueClass = 'text-slate-900' }) {
       <dd className={`text-[13.5px] font-medium text-right ${valueClass}`}>{value}</dd>
     </div>
   );
+}
+
+function formatSlot(slot) {
+  if (slot === 'morning') return 'Morning (8:00 AM - 2:30 PM)';
+  if (slot === 'evening') return 'Evening (3:00 PM - 8:30 PM)';
+  return '';
 }
 
 function Spinner() {

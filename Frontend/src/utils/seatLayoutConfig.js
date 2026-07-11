@@ -5,20 +5,27 @@
 // near the entrance (66–75).
 
 export const SECTIONS = [
-  { id: 'A', name: 'Section A', range: [1, 10], color: '#3B82F6', price: 799 },
-  { id: 'B', name: 'Section B', range: [11, 20], color: '#22C55E', price: 799 },
-  { id: 'C', name: 'Section C', range: [21, 30], color: '#EAB308', price: 899 },
-  { id: 'D', name: 'Section D', range: [31, 40], color: '#A855F7', price: 999 },
-  { id: 'E', name: 'Section E', range: [41, 50], color: '#F97316', price: 899 },
-  { id: 'F', name: 'Section F', range: [51, 60], color: '#14B8A6', price: 999 },
+  {
+    id: 'A',
+    name: 'Female Only Seats',
+    range: [1, 10],
+    color: '#EC4899',
+    price: 1500,
+    femaleOnly: true,
+  },
+  { id: 'B', name: 'Reserved Seats', range: [11, 20], color: '#11182B', price: 1500 },
+  { id: 'C', name: 'Reserved Seats', range: [21, 30], color: '#11182B', price: 1500 },
+  { id: 'D', name: 'Reserved Seats', range: [31, 40], color: '#11182B', price: 1500 },
+  { id: 'E', name: 'Reserved Seats', range: [41, 50], color: '#11182B', price: 1500 },
+  { id: 'F', name: 'Reserved Seats', range: [51, 60], color: '#11182B', price: 1500 },
   {
     id: 'G',
-    name: 'Section G',
+    name: 'Reserved Seats',
     range: [61, 65],
-    color: '#EC4899',
-    price: 1099,
+    color: '#11182B',
+    price: 1500,
   },
-  { id: 'H', name: 'Section H', range: [66, 75], color: '#F59E0B', price: 849 },
+  { id: 'H', name: 'General Seats', range: [66, 75], color: '#0E7A5F', price: 1000 },
 ];
 
 // Visual blocks — each mirrors one "table" of seats in the image.

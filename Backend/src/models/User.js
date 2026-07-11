@@ -47,12 +47,31 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    isArchived: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    archivedAt: {
+      type: Date,
+      default: null,
+    },
     profilePicture: {
       type: String,
       default: null,
     },
     lastLogin: {
       type: Date,
+      default: null,
+    },
+    passwordResetToken: {
+      type: String,
+      select: false,
+      default: null,
+    },
+    passwordResetExpires: {
+      type: Date,
+      select: false,
       default: null,
     },
   },

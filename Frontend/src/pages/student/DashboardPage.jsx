@@ -267,7 +267,10 @@ function SubscriptionSection({ subscriptionData, onRenew }) {
           { label: 'Plan', value: formatPlanName(subscription.plan) },
           { label: 'Start date', value: formatDate(subscription.startDate) },
           { label: 'Expiry date', value: formatDate(subscription.endDate) },
-          { label: 'Days left', value: `${daysRemaining} days` },
+          {
+            label: 'Days left',
+            value: `${daysRemaining} ${daysRemaining === 1 ? 'day' : 'days'}`,
+          },
         ].map((f) => (
           <div key={f.label}>
             <p className='text-[12px] text-slate-500'>{f.label}</p>
@@ -562,6 +565,10 @@ export default function StudentDashboard() {
 
   const latestPayment = payments[0] || null;
   const unreadCount = notifications.filter((n) => !n.isRead).length;
+  const persistentRenewal = notifications.find(
+    (notification) =>
+      notification.type === 'renewal' && notification.isPersistent
+  );
   const subscription = subscriptionData?.subscription;
   const reservation = reservationData?.reservation;
   const seat = reservationData?.seat || reservation?.seat;
@@ -630,6 +637,26 @@ export default function StudentDashboard() {
         {error && (
           <div className='rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700'>
             {error}
+          </div>
+        )}
+
+        {persistentRenewal && (
+          <div className='flex flex-col gap-3 border border-amber-300 bg-amber-50 px-4 py-4 sm:flex-row sm:items-center sm:justify-between'>
+            <div>
+              <p className='text-[14px] font-semibold text-amber-950'>
+                {persistentRenewal.title}
+              </p>
+              <p className='mt-1 text-[13px] text-amber-800'>
+                {persistentRenewal.message}
+              </p>
+            </div>
+            <button
+              type='button'
+              onClick={() => navigate('/subscription')}
+              className='shrink-0 rounded-lg bg-[#11182B] px-4 py-2.5 text-[13px] font-semibold text-white hover:bg-[#1B2540]'
+            >
+              Renew now
+            </button>
           </div>
         )}
 

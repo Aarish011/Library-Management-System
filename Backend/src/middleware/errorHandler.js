@@ -14,31 +14,38 @@ const errorHandler = (err, req, res, next) => {
 
   // Mongoose validation error
   if (err.name === 'ValidationError') {
-    const message = Object.values(err.errors).map((val) => val.message);
+    const message =
+      Object.values(err.errors)[0]?.message ||
+      'Please check the information you entered';
     error = { message, statusCode: 400 };
   }
 
   // Mongoose CastError (invalid ObjectId)
   if (err.name === 'CastError') {
-    const message = `Invalid ${err.path}`;
+    const message = 'The requested record could not be found';
     error = { message, statusCode: 400 };
   }
 
   // JWT errors
   if (err.name === 'JsonWebTokenError') {
-    const message = 'Invalid token';
+    const message = 'Your session is invalid. Please sign in again';
     error = { message, statusCode: 401 };
   }
 
   if (err.name === 'TokenExpiredError') {
-    const message = 'Token expired';
+    const message = 'Your session has expired. Please sign in again';
     error = { message, statusCode: 401 };
   }
 
-  res.status(error.statusCode || 500).json({
+  const statusCode = error.statusCode || 500;
+  const publicMessage =
+    statusCode >= 500
+      ? 'We could not complete your request right now. Please try again shortly.'
+      : error.message || 'Something went wrong. Please try again.';
+
+  res.status(statusCode).json({
     success: false,
-    message: error.message || 'Server Error',
-    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
+    message: publicMessage,
   });
 };
 

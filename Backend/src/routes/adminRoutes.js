@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const adminController = require('../controllers/adminController');
+const issueController = require('../controllers/issueController');
 const { protect, adminAuth } = require('../middleware/auth');
 const imageUpload = require('../middleware/upload');
 
@@ -26,6 +27,15 @@ router.delete(
   protect,
   adminAuth,
   adminController.deleteStudent
+);
+
+// Alumni archive
+router.get('/alumni', protect, adminAuth, adminController.getAlumni);
+router.get(
+  '/alumni/:alumniId',
+  protect,
+  adminAuth,
+  adminController.getAlumniDetails
 );
 
 // Seat management
@@ -63,13 +73,35 @@ router.get(
   adminController.getSubscriptionDetails
 );
 
+router.get(
+  '/renewals/due',
+  protect,
+  adminAuth,
+  adminController.getRenewalsDue
+);
+
 // Notifications
+router.get(
+  '/notifications',
+  protect,
+  adminAuth,
+  adminController.getNotificationHistory
+);
 router.post(
   '/notifications',
   protect,
   adminAuth,
   imageUpload.single('banner'),
   adminController.sendNotification
+);
+
+// Issue management
+router.get('/issues', protect, adminAuth, issueController.getAdminIssues);
+router.put(
+  '/issues/:issueId',
+  protect,
+  adminAuth,
+  issueController.updateAdminIssue
 );
 
 module.exports = router;

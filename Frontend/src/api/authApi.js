@@ -26,7 +26,11 @@ export const getCurrentUser = async () => {
     const response = await axios.get('/auth/me');
     return response.data;
   } catch (error) {
-    throw error.response?.data || { message: 'Failed to get user' };
+    throw {
+      ...(error.response?.data || { message: 'Failed to get user' }),
+      status: error.response?.status || null,
+      isNetworkError: !error.response,
+    };
   }
 };
 
@@ -37,11 +41,24 @@ export const logout = () => {
 };
 
 // Forgot password
-export const forgotPassword = async (email) => {
+export const forgotPassword = async (payload) => {
   try {
-    const response = await axios.post('/auth/forgot-password', { email });
+    const body =
+      typeof payload === 'string' ? { email: payload, method: 'email' } : payload;
+    const response = await axios.post('/auth/forgot-password', body);
     return response.data;
   } catch (error) {
-    throw error.response?.data || { message: 'Failed to send reset email' };
+    throw error.response?.data || { message: 'Failed to send reset link' };
+  }
+};
+
+export const resetPassword = async (token, password) => {
+  try {
+    const response = await axios.post(`/auth/reset-password/${token}`, {
+      password,
+    });
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || { message: 'Failed to reset password' };
   }
 };

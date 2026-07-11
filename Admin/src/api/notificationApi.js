@@ -1,26 +1,49 @@
-﻿import { getAdminToken } from './client';
+import { getAdminToken } from './client';
+import { getAdminFriendlyError } from './errorMessage';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+
+async function notificationRequest(options = {}) {
+  const token = getAdminToken();
+  let response;
+
+  try {
+    response = await fetch(`${API_BASE_URL}/admin/notifications`, {
+      ...options,
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(options.headers || {}),
+      },
+    });
+  } catch {
+    throw {
+      message:
+        'Unable to connect to the server. Check your connection and try again.',
+    };
+  }
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw {
+      ...data,
+      message: getAdminFriendlyError(response.status, data),
+    };
+  }
+  return data;
+}
 
 export async function sendNotification(payload) {
-  const token = getAdminToken();
   const body = new FormData();
-
   Object.entries(payload).forEach(([key, value]) => {
     if (value !== undefined && value !== null && value !== '') {
       body.append(key, value);
     }
   });
 
-  const response = await fetch(`${API_BASE_URL}/admin/notifications`, {
-    method: 'POST',
-    headers: {
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body,
-  });
+  return notificationRequest({ method: 'POST', body });
+}
 
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw data?.message ? data : { message: 'Request failed' };
-  return data;
+export async function getNotificationHistory() {
+  return notificationRequest();
 }

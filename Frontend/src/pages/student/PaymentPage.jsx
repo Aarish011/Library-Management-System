@@ -4,6 +4,7 @@ import razorpayLogo from '../../assets/images/payment/razorpay-logo.png';
 import payOnDeskIcon from '../../assets/images/payment/pay-on-desk-icon.png';
 import {
   LOCKER_DEPOSIT,
+  LOCKER_RENT,
   PLANS,
   computePrice,
   getPlan,
@@ -17,18 +18,24 @@ import {
 } from '../../api/paymentApi';
 import { getActiveReservation } from '../../api/reservationApi';
 import { getActiveSubscription } from '../../api/subscriptionApi';
+import useActionCooldown from '../../hooks/useActionCooldown';
 
 export default function PaymentPage() {
   const navigate = useNavigate();
   const { state } = useLocation();
+  const paymentCooldown = useActionCooldown(10000);
   const selectedPlan = state?.selectedPlan || null;
   const [payments, setPayments] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
+  const [loadingReservation, setLoadingReservation] = useState(true);
   const [selectedPlanId, setSelectedPlanId] = useState(
     selectedPlan?.plan || ''
   );
   const [lockerSelected, setLockerSelected] = useState(
     Boolean(state?.lockerSelected)
+  );
+  const [selectedSlot, setSelectedSlot] = useState(
+    state?.selectedSlot || state?.reservation?.slot || ''
   );
   const [processing, setProcessing] = useState('');
   const [deskReference, setDeskReference] = useState(null);
@@ -49,11 +56,46 @@ export default function PaymentPage() {
     () => selectedPlan || getPlan(selectedPlanId),
     [selectedPlan, selectedPlanId]
   );
-  const totalAmount = computePrice(plan, lockerSelected);
+  const hasLockerRent = plan?.plan === 'library_access';
+  const lockerDepositAlreadyPaid =
+    lockerSelected && Boolean(activeSubscription?.lockerSelected);
+  const totalAmount =
+    computePrice(plan, lockerSelected) -
+    (lockerDepositAlreadyPaid ? LOCKER_DEPOSIT : 0);
+  const hasMatchingSeatHold = useMemo(() => {
+    if (!plan || !reservationHold?.seat || !reservationHold?.reservation) {
+      return false;
+    }
+
+    const seatNumber = Number(reservationHold.seat.seatNumber);
+    const [minimumSeat, maximumSeat] = plan.allowedSeatRange || [];
+    const reservationPlan = reservationHold.reservation.plan;
+    const reservationSlot = reservationHold.reservation.slot || 'full_day';
+    const requiredSlot = plan.plan === 'library_access' ? selectedSlot : 'full_day';
+    const planMatches = !reservationPlan || reservationPlan === plan.plan;
+    const slotMatches = reservationSlot === requiredSlot;
+    const rangeMatches =
+      seatNumber >= minimumSeat && seatNumber <= maximumSeat;
+    const holdIsUsable =
+      reservationHold.reservation.status === 'confirmed' ||
+      (reservationHold.reservation.status === 'active' &&
+        reservationHold.timeLeft !== 0);
+
+    return planMatches && slotMatches && rangeMatches && holdIsUsable;
+  }, [plan, reservationHold, selectedSlot]);
 
   const isSeatBooked =
     reservationHold?.reservation?.status === 'confirmed' ||
     reservationHold?.seat?.status === 'booked';
+  const canRenewActiveSubscription =
+    Boolean(activeSubscription && plan) &&
+    activeSubscription.plan === plan.plan &&
+    new Date(activeSubscription.endDate).getTime() - Date.now() <=
+      2 * 24 * 60 * 60 * 1000;
+  const reservationDeadline =
+    reservationHold?.reservedUntil ||
+    reservationHold?.reservation?.reservedUntil ||
+    null;
 
   const loadHistory = async () => {
     try {
@@ -74,10 +116,22 @@ export default function PaymentPage() {
     getActiveReservation()
       .then((response) => {
         if (!ignore && response.success && response.data) {
-          setReservationHold(response.data);
+          setReservationHold({
+            ...response.data,
+            reservedUntil:
+              response.data.reservedUntil ||
+              response.data.reservation?.reservedUntil ||
+              null,
+          });
+          if (response.data.reservation?.slot) {
+            setSelectedSlot(response.data.reservation.slot);
+          }
         }
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        if (!ignore) setLoadingReservation(false);
+      });
 
     getActiveSubscription()
       .then((response) => {
@@ -93,17 +147,26 @@ export default function PaymentPage() {
   }, []);
 
   useEffect(() => {
-    if (!reservationHold?.reservedUntil) return undefined;
+    if (!reservationDeadline) return undefined;
 
     const updateTimer = () => {
       setReservationHold((current) => {
-        if (!current?.reservedUntil) return current;
         const seconds = Math.max(
           0,
           Math.floor(
-            (new Date(current.reservedUntil).getTime() - Date.now()) / 1000
+            (new Date(reservationDeadline).getTime() - Date.now()) / 1000
           )
         );
+
+        if (
+          seconds === 0 &&
+          current?.reservation?.status === 'active'
+        ) {
+          setError(
+            'Your seat hold has expired. Please select the seat again and try payment again.'
+          );
+        }
+
         return { ...current, timeLeft: seconds };
       });
     };
@@ -111,7 +174,7 @@ export default function PaymentPage() {
     updateTimer();
     const intervalId = window.setInterval(updateTimer, 1000);
     return () => window.clearInterval(intervalId);
-  }, [reservationHold?.reservedUntil]);
+  }, [reservationDeadline]);
 
   const validatePayment = () => {
     if (!plan) {
@@ -119,16 +182,21 @@ export default function PaymentPage() {
       return false;
     }
 
-    if (activeSubscription) {
+    if (activeSubscription && !canRenewActiveSubscription) {
       setError(
         'Your session is active. You cannot make another payment right now. Please ask for help from the library desk if you need changes.'
       );
       return false;
     }
 
-    if (plan.reservesSeat && !reservationHold?.seat) {
-      setError('Select a seat before paying for the reserved seat package.');
+    if (!hasMatchingSeatHold) {
+      setError('Select a seat for this package before making payment.');
       toast.error('Please select a seat first');
+      return false;
+    }
+
+    if (plan.plan === 'library_access' && !selectedSlot) {
+      setError('Select morning or evening slot before making payment.');
       return false;
     }
 
@@ -143,15 +211,35 @@ export default function PaymentPage() {
     return true;
   };
 
+  const handleDirectPlanSelection = (planId) => {
+    setSelectedPlanId(planId);
+    const nextPlan = getPlan(planId);
+    if (!nextPlan) return;
+
+    navigate('/book-seat', {
+      state: { selectedPlan: nextPlan },
+    });
+  };
+
   const handleRazorpay = async () => {
+    if (
+      !paymentCooldown.guard((seconds) =>
+        setError(`Please wait ${seconds}s before starting another payment.`)
+      )
+    ) {
+      return;
+    }
+
     if (!validatePayment()) return;
 
     try {
       setProcessing('razorpay');
+      paymentCooldown.startCooldown();
       setError('');
       await loadRazorpayScript();
       const orderResponse = await createRazorpayOrder({
         plan: plan.plan,
+        slot: plan.plan === 'library_access' ? selectedSlot : 'full_day',
         lockerSelected,
       });
       const order = orderResponse.data;
@@ -182,13 +270,23 @@ export default function PaymentPage() {
   };
 
   const handlePayOnDesk = async () => {
+    if (
+      !paymentCooldown.guard((seconds) =>
+        setError(`Please wait ${seconds}s before creating another reference.`)
+      )
+    ) {
+      return;
+    }
+
     if (!validatePayment()) return;
 
     try {
       setProcessing('desk');
+      paymentCooldown.startCooldown();
       setError('');
       const response = await createDeskReference({
         plan: plan.plan,
+        slot: plan.plan === 'library_access' ? selectedSlot : 'full_day',
         lockerSelected,
       });
       setDeskReference(response.data);
@@ -214,11 +312,22 @@ export default function PaymentPage() {
       <main className='max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 -mt-10 grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6'>
         <section className='space-y-6'>
           {activeSubscription && (
-            <div className='rounded-2xl border border-emerald-200 bg-emerald-50 p-6 text-sm text-emerald-800 shadow-sm'>
-              <p className='font-semibold'>Your session is active</p>
+            <div
+              className={`rounded-2xl border p-6 text-sm shadow-sm ${
+                canRenewActiveSubscription
+                  ? 'border-amber-200 bg-amber-50 text-amber-900'
+                  : 'border-emerald-200 bg-emerald-50 text-emerald-800'
+              }`}
+            >
+              <p className='font-semibold'>
+                {canRenewActiveSubscription
+                  ? 'Renewal payment is available'
+                  : 'Your session is active'}
+              </p>
               <p className='mt-1'>
-                You cannot make another payment right now. Please ask for help
-                from the library desk if you need changes.
+                {canRenewActiveSubscription
+                  ? 'Verified payment will extend your current plan by 30 days and keep your seat.'
+                  : 'You cannot make another payment right now. Please ask for help from the library desk if you need changes.'}
               </p>
             </div>
           )}
@@ -228,12 +337,21 @@ export default function PaymentPage() {
               <div className='flex items-center justify-between gap-4'>
                 <div>
                   <h2 className='text-[17px] font-semibold text-slate-900'>
-                    {isSeatBooked ? 'Your seat is booked' : 'Seat hold'}
+                    {isSeatBooked
+                      ? 'Your seat is booked'
+                      : reservationHold.timeLeft === 0
+                        ? 'Seat hold expired'
+                        : 'Seat hold'}
                   </h2>
                   <p className='text-sm text-slate-500'>
                     {isSeatBooked
                       ? `Seat ${reservationHold.seat.seatNumber} is booked for your active subscription.`
-                      : `Seat ${reservationHold.seat.seatNumber} is held while you complete payment.`}
+                      : reservationHold.timeLeft === 0
+                        ? `Seat ${reservationHold.seat.seatNumber} is no longer held. Please select the seat again and try payment again.`
+                        : `Seat ${reservationHold.seat.seatNumber} is held while you complete payment.`}
+                    {reservationHold.reservation?.slot &&
+                      reservationHold.reservation.slot !== 'full_day' &&
+                      ` Slot: ${formatSlot(reservationHold.reservation.slot)}.`}
                   </p>
                 </div>
                 {isSeatBooked ? (
@@ -244,10 +362,25 @@ export default function PaymentPage() {
                   <div
                     className={`rounded-xl px-4 py-2 text-sm font-semibold ${reservationHold.timeLeft === 0 ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800'}`}
                   >
-                    {formatTimer(reservationHold.timeLeft)}
+                    {reservationHold.timeLeft === 0
+                      ? 'Expired'
+                      : formatTimer(reservationHold.timeLeft)}
                   </div>
                 )}
               </div>
+              {!isSeatBooked && reservationHold.timeLeft === 0 && (
+                <button
+                  type='button'
+                  onClick={() =>
+                    navigate('/book-seat', {
+                      state: { selectedPlan: plan },
+                    })
+                  }
+                  className='mt-4 rounded-lg bg-[#11182B] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1B2540]'
+                >
+                  Select seat again
+                </button>
+              )}
             </div>
           )}
 
@@ -275,12 +408,13 @@ export default function PaymentPage() {
                   <p className='text-lg font-semibold text-slate-900'>
                     {plan.name}
                   </p>
-                  <p className='text-sm text-slate-600'>
-                    {plan.duration} days membership
-                    {plan.reservesSeat
-                      ? ' with reserved seat'
-                      : ' without reserved seat'}
-                  </p>
+                <p className='text-sm text-slate-600'>
+                  {plan.duration} days membership - seats{' '}
+                  {plan.allowedSeatRange?.[0]} to {plan.allowedSeatRange?.[1]}
+                  {plan.plan === 'library_access' && selectedSlot
+                    ? ` - ${formatSlot(selectedSlot)}`
+                    : ''}
+                </p>
                 </div>
                 <p className='text-2xl font-semibold text-slate-900'>
                   Rs. {totalAmount.toLocaleString('en-IN')}
@@ -289,7 +423,9 @@ export default function PaymentPage() {
             ) : (
               <select
                 value={selectedPlanId}
-                onChange={(event) => setSelectedPlanId(event.target.value)}
+                onChange={(event) =>
+                  handleDirectPlanSelection(event.target.value)
+                }
                 className='w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[#F4B740]'
               >
                 <option value=''>Select a package</option>
@@ -311,12 +447,18 @@ export default function PaymentPage() {
                 />
                 <span className='min-w-0'>
                   <span className='block text-sm font-medium text-slate-900'>
-                    Add locker deposit
+                    Add locker
                   </span>
                   <span className='block text-xs text-slate-500'>
-                    Optional refundable locker fee: Rs.{' '}
-                    {LOCKER_DEPOSIT.toLocaleString('en-IN')}.
+                    {hasLockerRent
+                      ? 'Optional locker rent plus refundable security. Security is not charged again when renewing the same locker.'
+                      : 'Reserved seat lockers only require refundable security. There is no monthly locker rent.'}
                   </span>
+                  {lockerDepositAlreadyPaid && (
+                    <span className='mt-1 block text-xs font-medium text-emerald-700'>
+                      Existing locker security detected. It will not be charged again.
+                    </span>
+                  )}
                 </span>
               </label>
             )}
@@ -332,10 +474,20 @@ export default function PaymentPage() {
                 title='Razorpay'
                 detail='Pay online and activate instantly after backend verification.'
                 buttonLabel={
-                  processing === 'razorpay' ? 'Opening...' : 'Pay with Razorpay'
+                  processing === 'razorpay'
+                    ? 'Opening...'
+                    : paymentCooldown.isCoolingDown
+                      ? `Wait ${paymentCooldown.remainingSeconds}s`
+                      : 'Pay with Razorpay'
                 }
                 disabled={
-                  !plan || Boolean(processing) || Boolean(activeSubscription)
+                  !plan ||
+                  loadingReservation ||
+                  !hasMatchingSeatHold ||
+                  Boolean(processing) ||
+                  paymentCooldown.isCoolingDown ||
+                  (Boolean(activeSubscription) &&
+                    !canRenewActiveSubscription)
                 }
                 onClick={handleRazorpay}
               />
@@ -344,10 +496,20 @@ export default function PaymentPage() {
                 title='Pay on Desk'
                 detail='Generate a reference and pay at the library desk. Activation happens after staff verification.'
                 buttonLabel={
-                  processing === 'desk' ? 'Creating...' : 'Generate reference'
+                  processing === 'desk'
+                    ? 'Creating...'
+                    : paymentCooldown.isCoolingDown
+                      ? `Wait ${paymentCooldown.remainingSeconds}s`
+                      : 'Generate reference'
                 }
                 disabled={
-                  !plan || Boolean(processing) || Boolean(activeSubscription)
+                  !plan ||
+                  loadingReservation ||
+                  !hasMatchingSeatHold ||
+                  Boolean(processing) ||
+                  paymentCooldown.isCoolingDown ||
+                  (Boolean(activeSubscription) &&
+                    !canRenewActiveSubscription)
                 }
                 onClick={handlePayOnDesk}
               />
@@ -372,10 +534,15 @@ export default function PaymentPage() {
                 <div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3'>
                   <span>{error}</span>
 
-                  {error.includes('Select a seat') && (
+                  {(error.includes('Select a seat') ||
+                    error.includes('select the seat again')) && (
                     <button
                       type='button'
-                      onClick={() => navigate('/seats')}
+                      onClick={() =>
+                        navigate('/book-seat', {
+                          state: { selectedPlan: plan },
+                        })
+                      }
                       className='inline-flex items-center justify-center rounded-lg bg-red-600 px-4 py-2 text-white text-sm font-medium hover:bg-red-700 transition'
                     >
                       Select Seat
@@ -466,8 +633,12 @@ function PaymentHistoryItem({ payment }) {
       </p>
       {payment.lockerSelected && (
         <p className='mt-1 text-xs text-slate-500'>
-          Includes refundable locker deposit: Rs.{' '}
-          {payment.lockerDeposit?.toLocaleString('en-IN') || LOCKER_DEPOSIT}
+          {payment.lockerRent > 0
+            ? `Includes locker rent Rs. ${(payment.lockerRent || LOCKER_RENT).toLocaleString('en-IN')}`
+            : 'Locker selected'}
+          {payment.lockerDeposit
+            ? ` + refundable security Rs. ${payment.lockerDeposit.toLocaleString('en-IN')}`
+            : ''}
         </p>
       )}
       <p className='mt-1 text-xs text-slate-400'>
@@ -494,6 +665,12 @@ function formatMethod(method) {
 
 function formatPlan(plan) {
   return getPlan(plan)?.name || plan;
+}
+
+function formatSlot(slot) {
+  if (slot === 'morning') return 'Morning (8:00 AM - 2:30 PM)';
+  if (slot === 'evening') return 'Evening (3:00 PM - 8:30 PM)';
+  return 'Full day';
 }
 
 function formatDate(value) {

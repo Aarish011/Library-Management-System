@@ -18,13 +18,6 @@ const PREPARATION_OPTIONS = [
   'SSC',
   'Other',
 ];
-const GENDER_OPTIONS = [
-  { value: 'male', label: 'Male' },
-  { value: 'female', label: 'Female' },
-  { value: 'other', label: 'Other' },
-];
-
-
 export default function ProfilePage() {
   const { setUser } = useAuth();
   const [profile, setProfile] = useState(null);
@@ -69,6 +62,17 @@ export default function ProfilePage() {
 
   const handleAvatarUpload = async (file) => {
     if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      showToast('Please select an image file.', 'error');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      showToast('Profile picture must be smaller than 5 MB.', 'error');
+      return;
+    }
+
     setIsUploadingAvatar(true);
     try {
       const updated = await uploadProfilePicture(file);
@@ -86,7 +90,11 @@ export default function ProfilePage() {
 
   const handleSave = async () => {
     setIsSaving(true);
-    const { emailDisplay, ...payload } = form;
+    const {
+      emailDisplay: _emailDisplay,
+      gender: _gender,
+      ...payload
+    } = form;
     try {
       const updated = await updateProfile(payload);
       setProfile(updated);
@@ -158,6 +166,8 @@ export default function ProfilePage() {
         <ProfileHeaderCard
           profile={profile}
           isEditing={isEditing}
+          isUploadingAvatar={isUploadingAvatar}
+          onAvatarUpload={handleAvatarUpload}
           onEdit={() => setIsEditing(true)}
         />
 
@@ -381,22 +391,11 @@ function PersonalDetailsCard({
           )}
         </Field>
 
-        <Field label='Gender'>
-          {isEditing ? (
-            <select
-              value={form.gender}
-              onChange={(e) => onChange('gender', e.target.value)}
-              className='input'
-            >
-              {GENDER_OPTIONS.map((g) => (
-                <option key={g.value} value={g.value}>
-                  {g.label}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <ReadValue value={capitalize(form.gender)} />
-          )}
+        <Field
+          label='Gender'
+          hint='Only the library admin can change your gender'
+        >
+          <ReadValue value={capitalize(form.gender)} muted={isEditing} />
         </Field>
 
         <Field label='Preparing for' hint='Your exam category'>

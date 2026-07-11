@@ -1,23 +1,27 @@
 ﻿// Frontend view of the subscription plans enforced by the backend.
 
 export const LOCKER_DEPOSIT = 250;
+export const LOCKER_RENT = 100;
 
 export const PLANS = [
   {
     id: 'library_access',
     plan: 'library_access',
     name: 'Library Access',
-    price: 1250,
+    price: 1000,
     duration: 30,
-    tagline: 'Monthly library access without reserved seat',
+    tagline: 'Monthly library access with a seat from 66 to 75',
     highlight: false,
-    reservesSeat: false,
+    reservesSeat: true,
+    allowedSeatRange: [66, 75],
     lockerDeposit: LOCKER_DEPOSIT,
+    lockerRent: LOCKER_RENT,
+    slots: ['morning', 'evening'],
     features: [
       'Full library access for 30 days',
-      'Seat is not reserved with this package',
-      'Same monthly fee for every student',
-      'Optional refundable locker deposit',
+      'Choose morning or evening slot from seats 66 to 75',
+      'Monthly fee is per selected slot',
+      'Optional locker rent and refundable security deposit',
     ],
   },
   {
@@ -29,12 +33,15 @@ export const PLANS = [
     tagline: 'Monthly library access with your selected seat reserved',
     highlight: true,
     reservesSeat: true,
+    allowedSeatRange: [1, 65],
     lockerDeposit: LOCKER_DEPOSIT,
+    lockerRent: 0,
+    slots: ['full_day'],
     features: [
       'Full library access for 30 days',
       'Selected seat is reserved after payment',
-      'Same fee for all seats',
-      'Optional refundable locker deposit',
+      'Choose one reserved seat from 1 to 65',
+      'Optional locker with refundable security deposit',
     ],
   },
 ];
@@ -44,7 +51,10 @@ export function getPlan(plan) {
 }
 
 export function computePrice(plan, lockerSelected = false) {
-  return (plan?.price ?? 0) + (lockerSelected ? LOCKER_DEPOSIT : 0);
+  return (
+    (plan?.price ?? 0) +
+    (lockerSelected ? (plan?.lockerRent ?? LOCKER_RENT) + LOCKER_DEPOSIT : 0)
+  );
 }
 
 export function formatPlanName(plan) {

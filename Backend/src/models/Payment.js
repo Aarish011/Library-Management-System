@@ -12,10 +12,20 @@ const paymentSchema = new mongoose.Schema(
       ref: 'Subscription',
       default: null,
     },
+    reservation: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Reservation',
+      default: null,
+    },
     plan: {
       type: String,
       enum: ['library_access', 'reserved_seat', 'monthly', 'quarterly', 'yearly'],
       default: null,
+    },
+    slot: {
+      type: String,
+      enum: ['morning', 'evening', 'full_day'],
+      default: 'full_day',
     },
     amount: {
       type: Number,
@@ -33,6 +43,10 @@ const paymentSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    lockerRent: {
+      type: Number,
+      default: 0,
+    },
     paymentMethod: {
       type: String,
       enum: ['razorpay', 'pay_on_desk'],
@@ -42,6 +56,11 @@ const paymentSchema = new mongoose.Schema(
       type: String,
       enum: ['pending', 'paid', 'failed'],
       default: 'pending',
+    },
+    failureReason: {
+      type: String,
+      default: null,
+      trim: true,
     },
     razorpayOrderId: {
       type: String,
@@ -80,6 +99,7 @@ const paymentSchema = new mongoose.Schema(
 
 paymentSchema.index({ user: 1 });
 paymentSchema.index({ status: 1 });
+paymentSchema.index({ reservation: 1 });
 paymentSchema.index({ paymentMethod: 1 });
 paymentSchema.index({ referenceId: 1 });
 paymentSchema.index({ razorpayOrderId: 1 });

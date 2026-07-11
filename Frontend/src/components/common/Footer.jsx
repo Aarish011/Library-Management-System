@@ -10,8 +10,8 @@ import { Link } from 'react-router-dom';
 const Footer = () => {
   return (
     <footer className='bg-[#11182B] text-gray-300 border-t border-white/10'>
-      <div className='max-w-7xl mx-auto px-6 py-14'>
-        <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-10'>
+      <div className='max-w-7xl mx-auto px-4 sm:px-6 py-10 sm:py-14'>
+        <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-8 sm:gap-10'>
           {/* Brand */}
           <div className='lg:col-span-2'>
             <h2 className='text-3xl font-bold text-white mb-4'>
@@ -36,27 +36,27 @@ const Footer = () => {
               Quick Links
             </h3>
 
-            <ul className='space-y-3'>
+            <ul className='space-y-1'>
               <li>
-                <Link to='/' className='hover:text-[#F4B740] transition'>
+                <Link to='/' className='block py-2 hover:text-[#F4B740] transition'>
                   Home
                 </Link>
               </li>
 
               <li>
-                <Link to='/plans' className='hover:text-[#F4B740] transition'>
+                <Link to='/plans' className='block py-2 hover:text-[#F4B740] transition'>
                   Plans
                 </Link>
               </li>
 
               <li>
-                <Link to='/about' className='hover:text-[#F4B740] transition'>
+                <Link to='/about' className='block py-2 hover:text-[#F4B740] transition'>
                   About
                 </Link>
               </li>
 
               <li>
-                <Link to='/contact' className='hover:text-[#F4B740] transition'>
+                <Link to='/contact' className='block py-2 hover:text-[#F4B740] transition'>
                   Contact
                 </Link>
               </li>
@@ -69,11 +69,11 @@ const Footer = () => {
               Student Services
             </h3>
 
-            <ul className='space-y-3'>
+            <ul className='space-y-1'>
               <li>
                 <Link
                   to='/dashboard'
-                  className='hover:text-[#F4B740] transition'
+                  className='block py-2 hover:text-[#F4B740] transition'
                 >
                   Dashboard
                 </Link>
@@ -82,7 +82,7 @@ const Footer = () => {
               <li>
                 <Link
                   to='/book-seat'
-                  className='hover:text-[#F4B740] transition'
+                  className='block py-2 hover:text-[#F4B740] transition'
                 >
                   Book Seat
                 </Link>
@@ -91,7 +91,7 @@ const Footer = () => {
               <li>
                 <Link
                   to='/subscription'
-                  className='hover:text-[#F4B740] transition'
+                  className='block py-2 hover:text-[#F4B740] transition'
                 >
                   Membership
                 </Link>
@@ -100,7 +100,7 @@ const Footer = () => {
               <li>
                 <Link
                   to='/payments'
-                  className='hover:text-[#F4B740] transition'
+                  className='block py-2 hover:text-[#F4B740] transition'
                 >
                   Payments
                 </Link>
@@ -114,31 +114,31 @@ const Footer = () => {
               Support
             </h3>
 
-            <ul className='space-y-3'>
+            <ul className='space-y-1'>
               <li>
-                <Link to='/faq' className='hover:text-[#F4B740] transition'>
-                  FAQ
+                <Link to='/support' className='block py-2 hover:text-[#F4B740] transition'>
+                  Raise an Issue
                 </Link>
               </li>
 
               <li>
                 <Link
-                  to='/privacy-policy'
-                  className='hover:text-[#F4B740] transition'
+                  to='/notifications'
+                  className='block py-2 hover:text-[#F4B740] transition'
                 >
-                  Privacy Policy
+                  Notifications
                 </Link>
               </li>
 
               <li>
-                <Link to='/terms' className='hover:text-[#F4B740] transition'>
-                  Terms & Conditions
+                <Link to='/profile' className='block py-2 hover:text-[#F4B740] transition'>
+                  My Profile
                 </Link>
               </li>
 
               <li>
-                <Link to='/help' className='hover:text-[#F4B740] transition'>
-                  Help Center
+                <Link to='/contact' className='block py-2 hover:text-[#F4B740] transition'>
+                  Contact Desk
                 </Link>
               </li>
             </ul>
@@ -150,29 +150,38 @@ const Footer = () => {
           <h3 className='text-[#F4B740] font-semibold mb-5'>Connect With Us</h3>
 
           <div className='flex gap-4'>
-            <a
-              href='#'
+            <button
+              type='button'
+              aria-label='Facebook page coming soon'
+              title='Facebook page coming soon'
               className='h-11 w-11 rounded-full bg-[#1B2540] flex items-center justify-center hover:bg-[#F4B740] hover:text-black transition-all duration-300'
             >
               <FaFacebookF />
-            </a>
+            </button>
 
-            <a
-              href='#'
+            <button
+              type='button'
+              aria-label='Instagram page coming soon'
+              title='Instagram page coming soon'
               className='h-11 w-11 rounded-full bg-[#1B2540] flex items-center justify-center hover:bg-[#F4B740] hover:text-black transition-all duration-300'
             >
               <FaInstagram />
-            </a>
+            </button>
 
-            <a
-              href='#'
+            <button
+              type='button'
+              aria-label='LinkedIn page coming soon'
+              title='LinkedIn page coming soon'
               className='h-11 w-11 rounded-full bg-[#1B2540] flex items-center justify-center hover:bg-[#F4B740] hover:text-black transition-all duration-300'
             >
               <FaLinkedinIn />
-            </a>
+            </button>
 
             <a
-              href='#'
+              href='https://wa.me/919876543210'
+              target='_blank'
+              rel='noreferrer'
+              aria-label='Contact Bookshelf on WhatsApp'
               className='h-11 w-11 rounded-full bg-[#1B2540] flex items-center justify-center hover:bg-[#F4B740] hover:text-black transition-all duration-300'
             >
               <FaWhatsapp />
@@ -181,7 +190,7 @@ const Footer = () => {
         </div>
 
         {/* Bottom Bar */}
-        <div className='border-t border-white/10 mt-12 pt-6 flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-gray-400'>
+        <div className='border-t border-white/10 mt-10 sm:mt-12 pt-6 flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-gray-400 text-center md:text-left'>
           <p>
             © {new Date().getFullYear()} Bookshelf Library. All rights reserved.
           </p>

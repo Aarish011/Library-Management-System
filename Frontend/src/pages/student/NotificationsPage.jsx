@@ -206,7 +206,11 @@ function NotificationRow({ notification, onMarkRead, onDelete }) {
     <div
       onClick={() => onMarkRead(notification)}
       className={`group flex items-start gap-3.5 px-4 sm:px-5 py-4 cursor-pointer transition-colors hover:bg-slate-50 ${
-        !notification.isRead ? 'bg-[#F4B740]/5' : ''
+        notification.isPersistent
+          ? 'bg-amber-50/70'
+          : !notification.isRead
+            ? 'bg-[#F4B740]/5'
+            : ''
       }`}
     >
       <TypeIcon type={notification.type} />
@@ -225,6 +229,11 @@ function NotificationRow({ notification, onMarkRead, onDelete }) {
           {!notification.isRead && (
             <span className='h-2 w-2 rounded-full bg-[#F4B740] shrink-0' />
           )}
+          {notification.isPersistent && (
+            <span className='shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800'>
+              Required until renewal
+            </span>
+          )}
         </div>
         <p className='text-[13px] text-slate-500 mt-0.5'>
           {notification.message}
@@ -234,30 +243,32 @@ function NotificationRow({ notification, onMarkRead, onDelete }) {
         </p>
       </div>
 
-      <button
-        type='button'
-        onClick={(event) => {
-          event.stopPropagation();
-          onDelete(notification);
-        }}
-        title='Delete notification'
-        className='opacity-0 group-hover:opacity-100 transition-opacity shrink-0 h-8 w-8 rounded-full flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50'
-      >
-        <svg
-          width='15'
-          height='15'
-          viewBox='0 0 24 24'
-          fill='none'
-          stroke='currentColor'
-          strokeWidth='2'
+      {!notification.isPersistent && (
+        <button
+          type='button'
+          onClick={(event) => {
+            event.stopPropagation();
+            onDelete(notification);
+          }}
+          title='Delete notification'
+          className='opacity-0 group-hover:opacity-100 transition-opacity shrink-0 h-8 w-8 rounded-full flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50'
         >
-          <path
-            d='M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6'
-            strokeLinecap='round'
-            strokeLinejoin='round'
-          />
-        </svg>
-      </button>
+          <svg
+            width='15'
+            height='15'
+            viewBox='0 0 24 24'
+            fill='none'
+            stroke='currentColor'
+            strokeWidth='2'
+          >
+            <path
+              d='M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6'
+              strokeLinecap='round'
+              strokeLinejoin='round'
+            />
+          </svg>
+        </button>
+      )}
     </div>
   );
 }

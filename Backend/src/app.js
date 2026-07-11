@@ -8,19 +8,51 @@ const hpp = require('hpp');
 const dotenv = require('dotenv');
 const connectDB = require('./config/database');
 const errorHandler = require('./middleware/errorHandler');
+const seedAdmin = require('./utils/seedAdmin');
 
 dotenv.config();
 
 // Connect to MongoDB
-connectDB();
+connectDB().then(async () => {
+  const hasAdminCredentials =
+    (process.env.adminEmail || process.env.ADMIN_EMAIL) &&
+    (process.env.adminPassword || process.env.ADMIN_PASSWORD);
+
+  if (!hasAdminCredentials) return;
+
+  try {
+    await seedAdmin();
+  } catch (error) {
+    console.error(`Admin sync failed: ${error.message}`);
+  }
+});
 
 const app = express();
+
+const allowedOrigins = [process.env.FRONTEND_URL, process.env.ADMIN_URL].filter(Boolean);
+const localNetworkOriginPattern =
+  /^http:\/\/(localhost|127\.0\.0\.1|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}):(5173|5174)$/;
+
+function isAllowedCorsOrigin(origin) {
+  if (!origin) return true;
+  if (allowedOrigins.includes(origin)) return true;
+  return (
+    process.env.NODE_ENV !== 'production' &&
+    localNetworkOriginPattern.test(origin)
+  );
+}
 
 // Security middleware
 app.use(helmet());
 app.use(
   cors({
-    origin: [process.env.FRONTEND_URL, process.env.ADMIN_URL],
+    origin(origin, callback) {
+      if (isAllowedCorsOrigin(origin)) {
+        callback(null, true);
+        return;
+      }
+      callback(new Error('Not allowed by CORS'));
+    },
     credentials: true,
   })
 );
@@ -52,6 +84,7 @@ const reservationRoutes = require('./routes/reservationRoutes');
 const subscriptionRoutes = require('./routes/subscriptionRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
+const issueRoutes = require('./routes/issueRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 
 app.use('/api/auth', authRoutes);
@@ -60,6 +93,7 @@ app.use('/api/reservations', reservationRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/issues', issueRoutes);
 app.use('/api/admin', adminRoutes);
 
 // Health check

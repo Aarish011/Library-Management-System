@@ -12,7 +12,10 @@ exports.getNotifications = async (req, res) => {
     if (req.query.isRead === 'false') filter.isRead = false;
 
     const [notifications, total, unreadCount] = await Promise.all([
-      Notification.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      Notification.find(filter)
+        .sort({ isPersistent: -1, createdAt: -1 })
+        .skip(skip)
+        .limit(limit),
       Notification.countDocuments(filter),
       Notification.countDocuments({ user: req.user._id, isRead: false }),
     ]);
@@ -134,7 +137,7 @@ exports.markAllAsRead = async (req, res) => {
 
 exports.deleteNotification = async (req, res) => {
   try {
-    const notification = await Notification.findOneAndDelete({
+    const notification = await Notification.findOne({
       _id: req.params.notificationId,
       user: req.user._id,
     });
@@ -145,6 +148,15 @@ exports.deleteNotification = async (req, res) => {
         message: 'Notification not found',
       });
     }
+
+    if (notification.isPersistent) {
+      return res.status(409).json({
+        success: false,
+        message: 'This renewal alert remains until your subscription is paid',
+      });
+    }
+
+    await notification.deleteOne();
 
     res.json({
       success: true,

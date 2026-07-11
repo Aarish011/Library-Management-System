@@ -29,6 +29,7 @@ const generateSeats = () => {
     seats.push({
       seatNumber: i,
       section,
+      zone: i >= 1 && i <= 10 ? 'girls' : 'general',
       status: 'available',
       assignedTo: null,
       price: getSeatPrice(i),

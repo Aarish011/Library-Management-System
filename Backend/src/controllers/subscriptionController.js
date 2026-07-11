@@ -42,10 +42,13 @@ exports.getActiveSubscription = async (req, res) => {
       });
     }
 
-    const totalDays = Math.max(
-      1,
-      Math.ceil((subscription.endDate - subscription.startDate) / 86400000)
-    );
+    const planConfig = getPlan(subscription.plan);
+    const totalDays =
+      planConfig?.duration ||
+      Math.max(
+        1,
+        Math.ceil((subscription.endDate - subscription.startDate) / 86400000)
+      );
     const daysRemaining = Math.max(
       0,
       Math.ceil((subscription.endDate - now) / 86400000)

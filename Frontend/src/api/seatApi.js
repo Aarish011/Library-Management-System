@@ -23,12 +23,14 @@ export const getSeatLayout = async () => {
 };
 
 // ✅ FIXED: Accept object with seatId and duration
-export const reserveSeat = async ({ seatId, duration = 300 }) => {
+export const reserveSeat = async ({ seatId, duration = 300, plan, slot }) => {
   try {
     console.log('📝 Reserving seat:', { seatId, duration });
     const response = await axios.post('/seats/reserve', {
       seatId,
       duration,
+      plan,
+      slot,
     });
     console.log('✅ Reserve response:', response.data);
     return response.data;

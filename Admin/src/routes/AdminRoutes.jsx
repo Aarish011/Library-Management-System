@@ -10,8 +10,11 @@ import PaymentsPage from '../pages/PaymentsPage';
 import NotificationsPage from '../pages/NotificationsPage';
 import ReportsPage from '../pages/ReportsPage';
 import SettingsPage from '../pages/SettingsPage';
+import AlumniPage from '../pages/AlumniPage';
+import RenewalsDuePage from '../pages/RenewalsDuePage';
+import IssuesPage from '../pages/IssuesPage';
 
-const pages = { '/dashboard': DashboardPage, '/students': StudentsPage, '/seats': SeatsPage, '/subscriptions': SubscriptionsPage, '/payments': PaymentsPage, '/notifications': NotificationsPage, '/reports': ReportsPage, '/settings': SettingsPage };
+const pages = { '/dashboard': DashboardPage, '/students': StudentsPage, '/alumni': AlumniPage, '/seats': SeatsPage, '/subscriptions': SubscriptionsPage, '/renewals': RenewalsDuePage, '/payments': PaymentsPage, '/issues': IssuesPage, '/notifications': NotificationsPage, '/reports': ReportsPage, '/settings': SettingsPage };
 
 export default function AdminRoutes() {
   const [path, setPath] = useState(window.location.hash.replace('#', '') || '/dashboard');

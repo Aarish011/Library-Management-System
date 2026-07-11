@@ -1,8 +1,10 @@
 // SeatLegend.jsx
 
 const LEGEND_ITEMS = [
-  { label: 'Available', classes: 'bg-emerald-50 border-emerald-400' },
-  { label: 'Occupied', classes: 'bg-red-50 border-red-300' },
+  { label: 'Both slots available', classes: 'bg-emerald-50 border-emerald-400' },
+  { label: 'Morning booked, evening available', classes: 'bg-blue-50 border-blue-400' },
+  { label: 'Evening booked, morning available', classes: 'bg-orange-50 border-orange-400' },
+  { label: 'Fully booked', classes: 'bg-red-50 border-red-300' },
   { label: 'Selected', classes: 'bg-amber-400 border-amber-500' },
   { label: 'Maintenance', classes: 'bg-slate-100 border-slate-300' },
 ];

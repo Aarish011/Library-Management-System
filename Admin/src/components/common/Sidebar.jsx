@@ -1,9 +1,12 @@
 const items = [
   ['#/dashboard', 'Dashboard'],
   ['#/students', 'Students'],
+  ['#/alumni', 'Alumni'],
   ['#/seats', 'Seats'],
   ['#/subscriptions', 'Subscriptions'],
+  ['#/renewals', 'Renewals Due'],
   ['#/payments', 'Payments'],
+  ['#/issues', 'Student Issues'],
   ['#/notifications', 'Notifications'],
   ['#/reports', 'Reports'],
   ['#/settings', 'Settings'],
