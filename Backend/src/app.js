@@ -29,16 +29,37 @@ connectDB().then(async () => {
 
 const app = express();
 
-const allowedOrigins = [process.env.FRONTEND_URL, process.env.ADMIN_URL].filter(Boolean);
+function parseAllowedOrigins() {
+  return [
+    process.env.FRONTEND_URL,
+    process.env.ADMIN_URL,
+    process.env.CLIENT_URL,
+    process.env.CORS_ORIGIN,
+    process.env.CORS_ALLOWED_ORIGINS,
+  ]
+    .filter(Boolean)
+    .flatMap((value) => value.split(','))
+    .map((origin) => origin.trim().replace(/\/$/, ''))
+    .filter(Boolean);
+}
+
+const allowedOrigins = parseAllowedOrigins();
 const localNetworkOriginPattern =
   /^http:\/\/(localhost|127\.0\.0\.1|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}):(5173|5174)$/;
 
 function isAllowedCorsOrigin(origin) {
   if (!origin) return true;
-  if (allowedOrigins.includes(origin)) return true;
+  const normalizedOrigin = origin.replace(/\/$/, '');
+  if (allowedOrigins.includes(normalizedOrigin)) return true;
+  if (
+    process.env.NODE_ENV === 'production' &&
+    /^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(normalizedOrigin)
+  ) {
+    return true;
+  }
   return (
     process.env.NODE_ENV !== 'production' &&
-    localNetworkOriginPattern.test(origin)
+    localNetworkOriginPattern.test(normalizedOrigin)
   );
 }
 

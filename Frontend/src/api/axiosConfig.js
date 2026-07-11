@@ -1,25 +1,8 @@
 import axios from 'axios';
 import { getUserFriendlyError } from '../utils/errorMessages';
+import { resolveApiBaseUrl } from '../config/api';
 
-function resolveApiUrl() {
-  const configuredUrl =
-    import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '';
-
-  if (typeof window === 'undefined') {
-    return configuredUrl || 'http://localhost:5000/api';
-  }
-
-  const hostname = window.location.hostname;
-  const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
-
-  if (configuredUrl && (isLocalhost || !configuredUrl.includes('localhost'))) {
-    return configuredUrl;
-  }
-
-  return `${window.location.protocol}//${hostname}:5000/api`;
-}
-
-const API_URL = resolveApiUrl();
+const API_URL = resolveApiBaseUrl();
 let sessionExpiryHandled = false;
 
 function isPublicAuthRequest(requestUrl) {

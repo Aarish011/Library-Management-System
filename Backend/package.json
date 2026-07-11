@@ -4,7 +4,7 @@
   "description": "Library Management System Backend API",
   "main": "src/server.js",
   "scripts": {
-    "start": "nodemon src/server.js",
+    "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "seed": "node src/seed.js",
     "seed:admin": "node src/seedAdmin.js"

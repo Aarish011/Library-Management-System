@@ -12,10 +12,42 @@ const PORT = process.env.PORT || 5000;
 
 const server = http.createServer(app);
 
+function parseAllowedOrigins() {
+  return [
+    process.env.FRONTEND_URL,
+    process.env.ADMIN_URL,
+    process.env.CLIENT_URL,
+    process.env.CORS_ORIGIN,
+    process.env.CORS_ALLOWED_ORIGINS,
+  ]
+    .filter(Boolean)
+    .flatMap((value) => value.split(','))
+    .map((origin) => origin.trim().replace(/\/$/, ''))
+    .filter(Boolean);
+}
+
+const allowedSocketOrigins = parseAllowedOrigins();
+
+function isAllowedSocketOrigin(origin) {
+  if (!origin) return true;
+  const normalizedOrigin = origin.replace(/\/$/, '');
+  if (allowedSocketOrigins.includes(normalizedOrigin)) return true;
+  return (
+    process.env.NODE_ENV === 'production' &&
+    /^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(normalizedOrigin)
+  );
+}
+
 // Socket.io setup
 const io = new Server(server, {
   cors: {
-    origin: [process.env.FRONTEND_URL, process.env.ADMIN_URL],
+    origin(origin, callback) {
+      if (isAllowedSocketOrigin(origin)) {
+        callback(null, true);
+        return;
+      }
+      callback(new Error('Not allowed by Socket CORS'));
+    },
     credentials: true,
   },
 });
