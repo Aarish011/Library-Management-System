@@ -20,6 +20,10 @@ function getTransporter() {
     secure:
       process.env.EMAIL_SECURE === 'true' ||
       port === 465,
+    requireTLS: port === 587,
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 20000,
     auth: {
       user,
       pass,
@@ -75,4 +79,13 @@ async function sendPasswordResetEmail({ to, name, resetUrl }) {
   });
 }
 
-module.exports = { getEmailConfigStatus, sendPasswordResetEmail };
+async function verifyEmailTransport() {
+  const transporter = getTransporter();
+  await transporter.verify();
+}
+
+module.exports = {
+  getEmailConfigStatus,
+  sendPasswordResetEmail,
+  verifyEmailTransport,
+};

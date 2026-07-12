@@ -352,7 +352,12 @@ exports.forgotPassword = async (req, res) => {
         user.passwordResetToken = null;
         user.passwordResetExpires = null;
         await user.save({ validateBeforeSave: false });
-        console.error('Password reset delivery error:', deliveryError);
+        console.error('Password reset delivery error:', {
+          code: deliveryError.code,
+          command: deliveryError.command,
+          responseCode: deliveryError.responseCode,
+          message: deliveryError.message,
+        });
         const isEmailConfigError = /email service is not configured/i.test(
           deliveryError.message || ''
         );

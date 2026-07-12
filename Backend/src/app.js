@@ -9,7 +9,10 @@ const dotenv = require('dotenv');
 const connectDB = require('./config/database');
 const errorHandler = require('./middleware/errorHandler');
 const seedAdmin = require('./utils/seedAdmin');
-const { getEmailConfigStatus } = require('./services/emailService');
+const {
+  getEmailConfigStatus,
+  verifyEmailTransport,
+} = require('./services/emailService');
 
 dotenv.config();
 
@@ -37,6 +40,19 @@ if (!emailConfigStatus.configured) {
     hasUser: emailConfigStatus.hasUser,
     hasPassword: emailConfigStatus.hasPassword,
   });
+} else {
+  verifyEmailTransport()
+    .then(() => {
+      console.log('Email SMTP connection verified');
+    })
+    .catch((error) => {
+      console.error('Email SMTP verification failed:', {
+        code: error.code,
+        command: error.command,
+        responseCode: error.responseCode,
+        message: error.message,
+      });
+    });
 }
 
 function parseAllowedOrigins() {
