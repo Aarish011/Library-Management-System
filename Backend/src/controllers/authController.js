@@ -8,6 +8,27 @@ const { verifyFirebaseIdToken } = require('../services/firebaseAdminService');
 
 const editableProfileFields = ['name', 'phone', 'preparation'];
 
+function buildArchivedEmail(user) {
+  const email = String(user.email || '').trim().toLowerCase();
+  if (email.startsWith(`archived-${user._id}-`)) return email;
+  return `archived-${user._id}-${email}`;
+}
+
+function buildArchivedPhone(user) {
+  const digits = String(user._id || '').replace(/\D/g, '');
+  return digits.padEnd(10, '0').slice(-10);
+}
+
+async function releaseArchivedUserIdentity(user) {
+  if (!user?.isArchived) return false;
+
+  user.email = buildArchivedEmail(user);
+  user.phone = buildArchivedPhone(user);
+  user.isActive = false;
+  await user.save({ validateBeforeSave: false });
+  return true;
+}
+
 // Register
 exports.register = async (req, res) => {
   try {
@@ -52,18 +73,28 @@ exports.register = async (req, res) => {
 
     const existingUser = await User.findOne({ email });
     if (existingUser) {
+      const releasedArchivedUser = await releaseArchivedUserIdentity(existingUser);
+      if (releasedArchivedUser) {
+        console.log(`Released archived user email for registration: ${email}`);
+      } else {
       return res.status(400).json({
         success: false,
         message: 'Email already registered',
       });
+      }
     }
 
     const existingPhone = await User.findOne({ phone });
     if (existingPhone) {
+      const releasedArchivedUser = await releaseArchivedUserIdentity(existingPhone);
+      if (releasedArchivedUser) {
+        console.log(`Released archived user phone for registration: ${phone}`);
+      } else {
       return res.status(400).json({
         success: false,
         message: 'Phone number already registered',
       });
+      }
     }
 
     const user = await User.create({

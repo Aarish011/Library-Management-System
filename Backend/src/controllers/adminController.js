@@ -249,6 +249,8 @@ exports.deleteStudent = async (req, res) => {
     student.isActive = false;
     student.isArchived = true;
     student.archivedAt = alumni.archivedAt;
+    student.email = `archived-${student._id}-${student.email}`;
+    student.phone = String(Date.now()).slice(-10);
     await student.save({ session });
 
     await session.commitTransaction();
