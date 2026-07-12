@@ -60,8 +60,13 @@ const ForgotPasswordPage = () => {
             <h3 className='text-xl font-semibold text-gray-800 mb-2'>
               Check Your Email
             </h3>
-            <p className='text-gray-600 mb-6'>
-              We've sent a password reset link to <strong>{email}</strong>
+            <p className='text-gray-600 mb-2'>
+              If an account exists for <strong>{email}</strong>, a password reset
+              link will be sent shortly.
+            </p>
+            <p className='text-sm text-gray-500 mb-6'>
+              For security, we do not reveal whether an email address is
+              registered.
             </p>
             <Link
               to='/login'
