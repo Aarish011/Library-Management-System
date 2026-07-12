@@ -26,7 +26,16 @@ function parseAllowedOrigins() {
     .filter(Boolean);
 }
 
-const allowedSocketOrigins = parseAllowedOrigins();
+const defaultProductionOrigins = [
+  'https://library.genzcollege.com',
+  'https://www.library.genzcollege.com',
+];
+
+const allowedSocketOrigins = Array.from(
+  new Set([...parseAllowedOrigins(), ...defaultProductionOrigins])
+);
+const vercelOriginPattern = /^https:\/\/[a-z0-9-]+\.vercel\.app$/i;
+const genzCollegeOriginPattern = /^https:\/\/([a-z0-9-]+\.)?genzcollege\.com$/i;
 
 function isAllowedSocketOrigin(origin) {
   if (!origin) return true;
@@ -34,7 +43,8 @@ function isAllowedSocketOrigin(origin) {
   if (allowedSocketOrigins.includes(normalizedOrigin)) return true;
   return (
     process.env.NODE_ENV === 'production' &&
-    /^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(normalizedOrigin)
+    (vercelOriginPattern.test(normalizedOrigin) ||
+      genzCollegeOriginPattern.test(normalizedOrigin))
   );
 }
 
@@ -46,6 +56,7 @@ const io = new Server(server, {
         callback(null, true);
         return;
       }
+      console.warn('Socket CORS blocked origin:', origin);
       callback(new Error('Not allowed by Socket CORS'));
     },
     credentials: true,
