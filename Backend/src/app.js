@@ -32,6 +32,7 @@ connectDB().then(async () => {
 });
 
 const app = express();
+app.set('trust proxy', 1);
 const emailConfigStatus = getEmailConfigStatus();
 
 if (!emailConfigStatus.configured) {

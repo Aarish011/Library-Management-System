@@ -11,10 +11,51 @@ const {
   renewSubscriptionForUser,
 } = require('../services/subscriptionService');
 const { uploadBuffer } = require('../config/cloudinary');
+const {
+  getEmailConfigStatus,
+  verifyEmailTransport,
+} = require('../services/emailService');
 
 function startOfMonth(date = new Date()) {
   return new Date(date.getFullYear(), date.getMonth(), 1);
 }
+
+exports.getEmailStatus = async (req, res) => {
+  const config = getEmailConfigStatus();
+
+  if (!config.configured) {
+    return res.status(503).json({
+      success: false,
+      message: 'Email service is not fully configured',
+      data: config,
+    });
+  }
+
+  try {
+    await verifyEmailTransport();
+    res.json({
+      success: true,
+      message: 'Email SMTP connection verified',
+      data: {
+        configured: true,
+        from: config.from,
+      },
+    });
+  } catch (error) {
+    res.status(502).json({
+      success: false,
+      message: 'Email SMTP verification failed',
+      data: {
+        configured: true,
+        from: config.from,
+        code: error.code || null,
+        command: error.command || null,
+        responseCode: error.responseCode || null,
+        smtpMessage: error.message || 'Unknown SMTP error',
+      },
+    });
+  }
+};
 
 exports.getDashboardStats = async (req, res) => {
   try {

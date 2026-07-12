@@ -8,6 +8,14 @@ const imageUpload = require('../middleware/upload');
 // Dashboard stats
 router.get('/dashboard', protect, adminAuth, adminController.getDashboardStats);
 
+// System diagnostics
+router.get(
+  '/system/email-status',
+  protect,
+  adminAuth,
+  adminController.getEmailStatus
+);
+
 // Student management
 router.get('/students', protect, adminAuth, adminController.getStudents);
 router.get(
