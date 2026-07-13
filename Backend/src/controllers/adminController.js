@@ -510,6 +510,7 @@ exports.confirmDeskPayment = async (req, res) => {
           payment.plan,
           {
             lockerSelected: payment.lockerSelected,
+            lockerNumber: payment.lockerNumber,
             slot: payment.slot,
             actorId: req.user._id,
           }
@@ -519,6 +520,7 @@ exports.confirmDeskPayment = async (req, res) => {
           payment.plan,
           {
             lockerSelected: payment.lockerSelected,
+            lockerNumber: payment.lockerNumber,
             slot: payment.slot,
             actorId: req.user._id,
           }
@@ -614,6 +616,7 @@ exports.getRenewalsDue = async (req, res) => {
           amount: 1,
           lockerSelected: 1,
           lockerDeposit: 1,
+          lockerNumber: 1,
           'user._id': 1,
           'user.name': 1,
           'user.email': 1,

@@ -1,5 +1,14 @@
 import axios from './axiosConfig';
 
+export const getAvailableLockers = async () => {
+  try {
+    const response = await axios.get('/payments/lockers/available');
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || { message: 'Failed to fetch lockers' };
+  }
+};
+
 export const createRazorpayOrder = async (payload) => {
   try {
     const response = await axios.post('/payments/razorpay/create-order', payload);

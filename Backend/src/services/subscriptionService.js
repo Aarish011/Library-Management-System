@@ -7,6 +7,7 @@ const AuditLog = require('../models/AuditLog');
 
 const LOCKER_DEPOSIT = 250;
 const LOCKER_RENT = 100;
+const TOTAL_LOCKERS = 36;
 const GENERAL_SEAT_SLOTS = ['morning', 'evening'];
 const FULL_DAY_SLOT = 'full_day';
 
@@ -45,6 +46,44 @@ function normalizeLockerSelected(value) {
   return value === true || value === 'true' || value === '1' || value === 1;
 }
 
+function normalizeLockerNumber(value) {
+  if (value === undefined || value === null || value === '') return null;
+  const number = Number(value);
+  if (!Number.isInteger(number) || number < 1 || number > TOTAL_LOCKERS) {
+    const error = new Error('Select a valid locker number between 1 and 36');
+    error.statusCode = 400;
+    throw error;
+  }
+  return String(number);
+}
+
+async function getAvailableLockers(userId = null) {
+  const allocations = await LockerAllocation.find({ status: 'active' })
+    .select('lockerNumber user')
+    .lean();
+
+  const occupied = new Map();
+  allocations.forEach((allocation) => {
+    if (allocation.lockerNumber) {
+      occupied.set(String(allocation.lockerNumber), String(allocation.user));
+    }
+  });
+
+  return Array.from({ length: TOTAL_LOCKERS }, (_, index) => {
+    const lockerNumber = String(index + 1);
+    const occupiedBy = occupied.get(lockerNumber) || null;
+    const assignedToCurrentUser =
+      userId && occupiedBy === String(userId);
+
+    return {
+      lockerNumber,
+      status:
+        occupiedBy && !assignedToCurrentUser ? 'occupied' : 'available',
+      assignedToCurrentUser,
+    };
+  });
+}
+
 function normalizeSlot(planConfig, slot) {
   if (planConfig?.plan === 'library_access') {
     return GENERAL_SEAT_SLOTS.includes(slot) ? slot : null;
@@ -66,6 +105,46 @@ async function getActiveLockerAllocation(userId) {
     securityDepositStatus: { $in: ['paid', 'partially_refunded', 'deducted'] },
     refundedAt: null,
   });
+}
+
+async function validateLockerSelection(userId, lockerSelected, lockerNumber) {
+  const wantsLocker = normalizeLockerSelected(lockerSelected);
+  const activeLocker = await getActiveLockerAllocation(userId);
+
+  if (!wantsLocker) {
+    return {
+      lockerSelected: false,
+      lockerNumber: null,
+      activeLocker,
+    };
+  }
+
+  const selectedLockerNumber =
+    normalizeLockerNumber(lockerNumber) || activeLocker?.lockerNumber || null;
+
+  if (!selectedLockerNumber) {
+    const error = new Error('Select a locker number before payment');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const conflictingLocker = await LockerAllocation.findOne({
+    lockerNumber: selectedLockerNumber,
+    status: 'active',
+    user: { $ne: userId },
+  }).select('_id lockerNumber');
+
+  if (conflictingLocker) {
+    const error = new Error(`Locker ${selectedLockerNumber} is already assigned`);
+    error.statusCode = 409;
+    throw error;
+  }
+
+  return {
+    lockerSelected: true,
+    lockerNumber: selectedLockerNumber,
+    activeLocker,
+  };
 }
 
 async function shouldChargeLockerDeposit(userId) {
@@ -108,7 +187,8 @@ function buildSubscriptionPayload(
   startDate = new Date(),
   lockerSelected = false,
   slot = FULL_DAY_SLOT,
-  chargeLockerDeposit = true
+  chargeLockerDeposit = true,
+  lockerNumber = null
 ) {
   const endDate = new Date(startDate.getTime() + planConfig.duration * 24 * 60 * 60 * 1000);
   const wantsLocker = normalizeLockerSelected(lockerSelected);
@@ -126,6 +206,7 @@ function buildSubscriptionPayload(
     lockerSelected: wantsLocker,
     lockerDeposit: fees.lockerDeposit,
     lockerRent: fees.lockerRent,
+    lockerNumber: wantsLocker ? normalizeLockerNumber(lockerNumber) : null,
   };
 }
 
@@ -136,21 +217,42 @@ async function ensureLockerAllocationForPayment(
   securityAlreadyCovered = false
 ) {
   if (!subscription.lockerSelected) return null;
+  const lockerNumber = normalizeLockerNumber(subscription.lockerNumber);
+  if (!lockerNumber) {
+    const error = new Error('Select a locker number before activating locker access');
+    error.statusCode = 400;
+    throw error;
+  }
 
   let allocation = await LockerAllocation.findOne({
     user: userId,
     status: 'active',
   });
 
+  const conflictingLocker = await LockerAllocation.findOne({
+    lockerNumber,
+    status: 'active',
+    user: { $ne: userId },
+  }).select('_id lockerNumber');
+
+  if (conflictingLocker) {
+    const error = new Error(`Locker ${lockerNumber} is already assigned`);
+    error.statusCode = 409;
+    throw error;
+  }
+
   const created = !allocation;
   if (!allocation) {
     allocation = await LockerAllocation.create({
       user: userId,
+      lockerNumber,
       status: 'active',
       securityDepositAmount: LOCKER_DEPOSIT,
       securityDepositStatus:
         subscription.lockerDeposit > 0 || securityAlreadyCovered ? 'paid' : 'unpaid',
     });
+  } else if (allocation.lockerNumber !== lockerNumber) {
+    allocation.lockerNumber = lockerNumber;
   }
 
   if (subscription.lockerDeposit > 0) {
@@ -170,6 +272,7 @@ async function ensureLockerAllocationForPayment(
       metadata: {
         subscription: subscription._id,
         plan: subscription.plan,
+        lockerNumber,
       },
     });
   }
@@ -178,6 +281,10 @@ async function ensureLockerAllocationForPayment(
     allocation.securityDepositAmount = LOCKER_DEPOSIT;
     allocation.securityDepositStatus = 'paid';
     allocation.refundedAt = null;
+    await allocation.save();
+  }
+
+  if (allocation.isModified()) {
     await allocation.save();
   }
 
@@ -279,7 +386,14 @@ async function activateSubscriptionForUser(userId, planId, options = {}) {
     }
   }
 
-  const chargeLockerDeposit = await shouldChargeLockerDeposit(userId);
+  const lockerSelection = await validateLockerSelection(
+    userId,
+    options.lockerSelected,
+    options.lockerNumber
+  );
+  const chargeLockerDeposit = lockerSelection.lockerSelected
+    ? await shouldChargeLockerDeposit(userId)
+    : false;
 
   await Subscription.updateMany(
     { user: userId, status: { $in: ['active', 'pending'] } },
@@ -292,9 +406,10 @@ async function activateSubscriptionForUser(userId, planId, options = {}) {
       planConfig,
       seatId,
       new Date(),
-      options.lockerSelected,
+      lockerSelection.lockerSelected,
       selectedSlot,
-      chargeLockerDeposit
+      chargeLockerDeposit,
+      lockerSelection.lockerNumber
     )
   );
 
@@ -340,6 +455,11 @@ async function renewSubscriptionForUser(userId, subscriptionId, planId, options 
   const wantsLocker = normalizeLockerSelected(
     options.lockerSelected ?? subscription.lockerSelected
   );
+  const lockerSelection = await validateLockerSelection(
+    userId,
+    wantsLocker,
+    options.lockerNumber || subscription.lockerNumber
+  );
   const chargeLockerDeposit = wantsLocker
     ? await shouldChargeLockerDeposit(userId)
     : false;
@@ -348,9 +468,10 @@ async function renewSubscriptionForUser(userId, subscriptionId, planId, options 
     planConfig,
     subscription.seat,
     startDate,
-    wantsLocker,
+    lockerSelection.lockerSelected,
     selectedSlot,
-    chargeLockerDeposit
+    chargeLockerDeposit,
+    lockerSelection.lockerNumber
   );
 
   subscription.plan = payload.plan;
@@ -362,6 +483,7 @@ async function renewSubscriptionForUser(userId, subscriptionId, planId, options 
   subscription.lockerSelected = payload.lockerSelected;
   subscription.lockerDeposit = payload.lockerDeposit;
   subscription.lockerRent = payload.lockerRent;
+  subscription.lockerNumber = payload.lockerNumber;
   subscription.slot = payload.slot;
   await subscription.save();
   await ensureLockerAllocationForPayment(
@@ -389,15 +511,19 @@ module.exports = {
   PLANS,
   LOCKER_DEPOSIT,
   LOCKER_RENT,
+  TOTAL_LOCKERS,
   GENERAL_SEAT_SLOTS,
   FULL_DAY_SLOT,
   getPlan,
   getPlanAmount,
   calculatePlanFees,
   normalizeSlot,
+  normalizeLockerNumber,
+  getAvailableLockers,
   getLockerRentForPlan,
   getActiveLockerAllocation,
   shouldChargeLockerDeposit,
+  validateLockerSelection,
   normalizeLockerSelected,
   activateSubscriptionForUser,
   renewSubscriptionForUser,

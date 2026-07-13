@@ -5,9 +5,11 @@ const { createOrder, verifyPaymentSignature } = require('../services/razorpaySer
 const {
   getPlan,
   calculatePlanFees,
+  getAvailableLockers,
   normalizeSlot,
   normalizeLockerSelected,
   shouldChargeLockerDeposit,
+  validateLockerSelection,
   activateSubscriptionForUser,
   renewSubscriptionForUser,
 } = require('../services/subscriptionService');
@@ -95,7 +97,7 @@ function getRenewalSubscription(activeSubscription, planConfig) {
 async function getPaymentSelection(userId, body = {}) {
   const requestedPlan = body.plan || body.planType;
   const planConfig = getPlan(requestedPlan);
-  const lockerSelected = normalizeLockerSelected(body.lockerSelected);
+  const requestedLockerSelected = normalizeLockerSelected(body.lockerSelected);
 
   if (!planConfig) {
     const error = new Error('Invalid subscription plan');
@@ -110,24 +112,50 @@ async function getPaymentSelection(userId, body = {}) {
     throw error;
   }
 
-  const chargeLockerDeposit = lockerSelected
+  const lockerSelection = await validateLockerSelection(
+    userId,
+    requestedLockerSelected,
+    body.lockerNumber
+  );
+
+  const chargeLockerDeposit = lockerSelection.lockerSelected
     ? await shouldChargeLockerDeposit(userId)
     : false;
-  const fees = calculatePlanFees(planConfig, lockerSelected, chargeLockerDeposit);
+  const fees = calculatePlanFees(
+    planConfig,
+    lockerSelection.lockerSelected,
+    chargeLockerDeposit
+  );
 
   return {
     planConfig,
     slot,
-    lockerSelected,
+    lockerSelected: lockerSelection.lockerSelected,
+    lockerNumber: lockerSelection.lockerNumber,
     lockerRent: fees.lockerRent,
     lockerDeposit: fees.lockerDeposit,
     amount: fees.total,
   };
 }
 
+exports.getAvailableLockers = async (req, res) => {
+  try {
+    const lockers = await getAvailableLockers(req.user._id);
+    res.json({
+      success: true,
+      data: lockers,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to load lockers',
+    });
+  }
+};
+
 exports.createRazorpayOrder = async (req, res) => {
   try {
-    const { planConfig, slot, lockerSelected, lockerRent, lockerDeposit, amount } =
+    const { planConfig, slot, lockerSelected, lockerNumber, lockerRent, lockerDeposit, amount } =
       await getPaymentSelection(req.user._id, req.body);
 
     const activeSubscription = await getActiveSubscription(req.user._id);
@@ -161,6 +189,7 @@ exports.createRazorpayOrder = async (req, res) => {
         plan: planConfig.plan,
         slot,
         lockerSelected: String(lockerSelected),
+        lockerNumber: lockerNumber || '',
       },
     });
 
@@ -170,6 +199,7 @@ exports.createRazorpayOrder = async (req, res) => {
       slot,
       amount,
       lockerSelected,
+      lockerNumber,
       lockerRent,
       lockerDeposit,
       currency: order.currency,
@@ -192,6 +222,7 @@ exports.createRazorpayOrder = async (req, res) => {
         plan: planConfig,
         slot,
         lockerSelected,
+        lockerNumber,
         lockerRent,
         lockerDeposit,
         user: {
@@ -284,6 +315,7 @@ exports.verifyRazorpayPayment = async (req, res) => {
           payment.plan,
           {
             lockerSelected: payment.lockerSelected,
+            lockerNumber: payment.lockerNumber,
             slot: payment.slot,
             actorId: req.user._id,
           }
@@ -293,6 +325,7 @@ exports.verifyRazorpayPayment = async (req, res) => {
           payment.plan,
           {
             lockerSelected: payment.lockerSelected,
+            lockerNumber: payment.lockerNumber,
             slot: payment.slot,
             actorId: req.user._id,
           }
@@ -327,7 +360,7 @@ exports.verifyRazorpayPayment = async (req, res) => {
 
 exports.createDeskReference = async (req, res) => {
   try {
-    const { planConfig, slot, lockerSelected, lockerRent, lockerDeposit, amount } =
+    const { planConfig, slot, lockerSelected, lockerNumber, lockerRent, lockerDeposit, amount } =
       await getPaymentSelection(req.user._id, req.body);
 
     const activeSubscription = await getActiveSubscription(req.user._id);
@@ -351,6 +384,7 @@ exports.createDeskReference = async (req, res) => {
       slot,
       amount,
       lockerSelected,
+      lockerNumber,
       lockerRent,
       lockerDeposit,
       paymentMethod: 'pay_on_desk',
@@ -369,6 +403,7 @@ exports.createDeskReference = async (req, res) => {
         plan: planConfig,
         slot,
         lockerSelected,
+        lockerNumber,
         lockerRent,
         lockerDeposit,
       },
@@ -381,7 +416,7 @@ exports.createDeskReference = async (req, res) => {
 exports.getPaymentHistory = async (req, res) => {
   try {
     const payments = await Payment.find({ user: req.user._id })
-      .populate('subscription', 'plan slot startDate endDate status lockerSelected lockerDeposit lockerRent')
+      .populate('subscription', 'plan slot startDate endDate status lockerSelected lockerDeposit lockerRent lockerNumber')
       .sort({ paymentDate: -1, createdAt: -1 })
       .limit(20);
 

@@ -3,6 +3,9 @@ const router = express.Router();
 const paymentController = require('../controllers/paymentController');
 const { protect } = require('../middleware/auth');
 
+// Locker availability
+router.get('/lockers/available', protect, paymentController.getAvailableLockers);
+
 // Create Razorpay order
 router.post(
   '/razorpay/create-order',

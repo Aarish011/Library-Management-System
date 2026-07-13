@@ -11,6 +11,14 @@ const lockerAllocationSchema = new mongoose.Schema(
       type: String,
       default: null,
       trim: true,
+      validate: {
+        validator(value) {
+          if (!value) return true;
+          const number = Number(value);
+          return Number.isInteger(number) && number >= 1 && number <= 36;
+        },
+        message: 'Locker number must be between 1 and 36',
+      },
     },
     status: {
       type: String,
@@ -59,7 +67,16 @@ lockerAllocationSchema.index(
     partialFilterExpression: { status: 'active' },
   }
 );
-lockerAllocationSchema.index({ lockerNumber: 1, status: 1 });
+lockerAllocationSchema.index(
+  { lockerNumber: 1, status: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      status: 'active',
+      lockerNumber: { $type: 'string' },
+    },
+  }
+);
 lockerAllocationSchema.index({ securityDepositStatus: 1 });
 
 module.exports = mongoose.model('LockerAllocation', lockerAllocationSchema);

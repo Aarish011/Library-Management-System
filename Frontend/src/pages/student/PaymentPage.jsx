@@ -13,6 +13,7 @@ import toast from 'react-hot-toast';
 import {
   createDeskReference,
   createRazorpayOrder,
+  getAvailableLockers,
   getPaymentHistory,
   verifyRazorpayPayment,
 } from '../../api/paymentApi';
@@ -35,6 +36,11 @@ export default function PaymentPage() {
   const [lockerSelected, setLockerSelected] = useState(
     Boolean(state?.lockerSelected)
   );
+  const [selectedLockerNumber, setSelectedLockerNumber] = useState(
+    state?.lockerNumber || ''
+  );
+  const [lockers, setLockers] = useState([]);
+  const [loadingLockers, setLoadingLockers] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState(
     state?.selectedSlot || state?.reservation?.slot || ''
   );
@@ -97,6 +103,7 @@ export default function PaymentPage() {
     reservationHold?.reservedUntil ||
     reservationHold?.reservation?.reservedUntil ||
     null;
+  const lockerSelectionMissing = lockerSelected && !selectedLockerNumber;
 
   const loadHistory = async () => {
     try {
@@ -146,6 +153,41 @@ export default function PaymentPage() {
       ignore = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!lockerSelected) {
+      setSelectedLockerNumber('');
+      return undefined;
+    }
+
+    let ignore = false;
+    setLoadingLockers(true);
+    getAvailableLockers()
+      .then((response) => {
+        if (!ignore && response.success) {
+          const lockerList = response.data || [];
+          setLockers(lockerList);
+          const ownLocker = lockerList.find(
+            (locker) => locker.assignedToCurrentUser
+          );
+          if (ownLocker && !selectedLockerNumber) {
+            setSelectedLockerNumber(ownLocker.lockerNumber);
+          }
+        }
+      })
+      .catch((err) => {
+        if (!ignore) {
+          setError(err.message || 'Failed to load locker availability');
+        }
+      })
+      .finally(() => {
+        if (!ignore) setLoadingLockers(false);
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [lockerSelected, selectedLockerNumber]);
 
   useEffect(() => {
     if (!reservationDeadline) return undefined;
@@ -209,6 +251,12 @@ export default function PaymentPage() {
       return false;
     }
 
+    if (lockerSelected && !selectedLockerNumber) {
+      setError('Select a locker number before payment.');
+      toast.error('Please select a locker');
+      return false;
+    }
+
     return true;
   };
 
@@ -242,6 +290,7 @@ export default function PaymentPage() {
         plan: plan.plan,
         slot: plan.plan === 'library_access' ? selectedSlot : 'full_day',
         lockerSelected,
+        lockerNumber: lockerSelected ? selectedLockerNumber : null,
       });
       const order = orderResponse.data;
 
@@ -289,6 +338,7 @@ export default function PaymentPage() {
         plan: plan.plan,
         slot: plan.plan === 'library_access' ? selectedSlot : 'full_day',
         lockerSelected,
+        lockerNumber: lockerSelected ? selectedLockerNumber : null,
       });
       setDeskReference(response.data);
       await loadHistory();
@@ -439,29 +489,96 @@ export default function PaymentPage() {
             )}
 
             {plan && (
-              <label className='mt-4 flex items-start gap-3 rounded-xl border border-slate-200 p-3 cursor-pointer hover:bg-slate-50'>
-                <input
-                  type='checkbox'
-                  checked={lockerSelected}
-                  onChange={(event) => setLockerSelected(event.target.checked)}
-                  className='mt-1 h-4 w-4 accent-[#11182B]'
-                />
-                <span className='min-w-0'>
-                  <span className='block text-sm font-medium text-slate-900'>
-                    Add locker
-                  </span>
-                  <span className='block text-xs text-slate-500'>
-                    {hasLockerRent
-                      ? 'Optional locker rent plus refundable security. Security is not charged again when renewing the same locker.'
-                      : 'Reserved seat lockers only require refundable security. There is no monthly locker rent.'}
-                  </span>
-                  {lockerDepositAlreadyPaid && (
-                    <span className='mt-1 block text-xs font-medium text-emerald-700'>
-                      Existing locker security detected. It will not be charged again.
+              <>
+                <label className='mt-4 flex items-start gap-3 rounded-xl border border-slate-200 p-3 cursor-pointer hover:bg-slate-50'>
+                  <input
+                    type='checkbox'
+                    checked={lockerSelected}
+                    onChange={(event) => setLockerSelected(event.target.checked)}
+                    className='mt-1 h-4 w-4 accent-[#11182B]'
+                  />
+                  <span className='min-w-0'>
+                    <span className='block text-sm font-medium text-slate-900'>
+                      Add locker
                     </span>
-                  )}
-                </span>
-              </label>
+                    <span className='block text-xs text-slate-500'>
+                      {hasLockerRent
+                        ? 'Optional locker rent plus refundable security. Security is not charged again when renewing the same locker.'
+                        : 'Reserved seat lockers only require refundable security. There is no monthly locker rent.'}
+                    </span>
+                    {lockerDepositAlreadyPaid && (
+                      <span className='mt-1 block text-xs font-medium text-emerald-700'>
+                        Existing locker security detected. It will not be charged again.
+                      </span>
+                    )}
+                  </span>
+                </label>
+
+                {lockerSelected && (
+                  <div className='mt-4 rounded-xl border border-slate-200 p-4'>
+                    <div className='mb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1'>
+                      <div>
+                        <p className='text-sm font-semibold text-slate-900'>
+                          Choose locker number
+                        </p>
+                        <p className='text-xs text-slate-500'>
+                          Lockers 1 to 36. Occupied lockers are disabled.
+                        </p>
+                      </div>
+                      {selectedLockerNumber && (
+                        <span className='text-xs font-semibold text-emerald-700'>
+                          Locker {selectedLockerNumber} selected
+                        </span>
+                      )}
+                    </div>
+
+                    {loadingLockers ? (
+                      <div className='rounded-lg bg-slate-50 px-3 py-4 text-center text-sm text-slate-500'>
+                        Loading lockers...
+                      </div>
+                    ) : (
+                      <div className='grid grid-cols-6 sm:grid-cols-9 gap-2'>
+                        {lockers.map((locker) => {
+                          const active =
+                            selectedLockerNumber === locker.lockerNumber;
+                          const disabled =
+                            locker.status === 'occupied' &&
+                            !locker.assignedToCurrentUser;
+
+                          return (
+                            <button
+                              key={locker.lockerNumber}
+                              type='button'
+                              disabled={disabled || Boolean(processing)}
+                              onClick={() =>
+                                setSelectedLockerNumber(locker.lockerNumber)
+                              }
+                              title={
+                                disabled
+                                  ? `Locker ${locker.lockerNumber} is occupied`
+                                  : locker.assignedToCurrentUser
+                                    ? `Your current locker ${locker.lockerNumber}`
+                                    : `Select locker ${locker.lockerNumber}`
+                              }
+                              className={`h-10 rounded-lg border text-sm font-semibold transition ${
+                                active
+                                  ? 'border-[#11182B] bg-[#11182B] text-white'
+                                  : locker.assignedToCurrentUser
+                                    ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                                    : disabled
+                                      ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'
+                                      : 'border-slate-200 bg-white text-slate-700 hover:border-[#F4B740] hover:bg-[#F4B740]/10'
+                              }`}
+                            >
+                              {locker.lockerNumber}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
             )}
           </div>
 
@@ -485,6 +602,8 @@ export default function PaymentPage() {
                 disabled={
                   !plan ||
                   loadingReservation ||
+                  loadingLockers ||
+                  lockerSelectionMissing ||
                   !hasMatchingSeatHold ||
                   Boolean(processing) ||
                   paymentCooldown.isCoolingDown ||
@@ -507,6 +626,8 @@ export default function PaymentPage() {
                 disabled={
                   !plan ||
                   loadingReservation ||
+                  loadingLockers ||
+                  lockerSelectionMissing ||
                   !hasMatchingSeatHold ||
                   Boolean(processing) ||
                   paymentCooldown.isCoolingDown ||
@@ -524,6 +645,11 @@ export default function PaymentPage() {
                   Reference ID:{' '}
                   <span className='font-mono'>{deskReference.referenceId}</span>
                 </p>
+                {deskReference.lockerNumber && (
+                  <p className='mt-1'>
+                    Locker: <span className='font-semibold'>{deskReference.lockerNumber}</span>
+                  </p>
+                )}
                 <p className='mt-1'>
                   Show this reference at the library desk. Your subscription
                   will stay pending until staff verifies the payment.
@@ -635,6 +761,7 @@ function PaymentHistoryItem({ payment }) {
       </p>
       {payment.lockerSelected && (
         <p className='mt-1 text-xs text-slate-500'>
+          {payment.lockerNumber ? `Locker ${payment.lockerNumber}. ` : ''}
           {payment.lockerRent > 0
             ? `Includes locker rent Rs. ${(payment.lockerRent || LOCKER_RENT).toLocaleString('en-IN')}`
             : 'Locker selected'}

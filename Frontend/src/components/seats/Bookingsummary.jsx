@@ -125,8 +125,8 @@ export default function BookingSummary({
           </span>
           <span className='block text-[12.5px] text-slate-500'>
             {hasLockerRent
-              ? `Rs. ${LOCKER_RENT.toLocaleString('en-IN')}/month rent + refundable Rs. ${LOCKER_DEPOSIT.toLocaleString('en-IN')} security.`
-              : `Refundable Rs. ${LOCKER_DEPOSIT.toLocaleString('en-IN')} security only. No monthly locker rent for reserved seats.`}
+              ? `Choose locker number on payment page. Rs. ${LOCKER_RENT.toLocaleString('en-IN')}/month rent + refundable Rs. ${LOCKER_DEPOSIT.toLocaleString('en-IN')} security.`
+              : `Choose locker number on payment page. Refundable Rs. ${LOCKER_DEPOSIT.toLocaleString('en-IN')} security only. No monthly locker rent for reserved seats.`}
           </span>
         </span>
       </label>

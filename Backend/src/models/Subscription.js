@@ -52,6 +52,11 @@ const subscriptionSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    lockerNumber: {
+      type: String,
+      default: null,
+      trim: true,
+    },
     autoRenew: {
       type: Boolean,
       default: true,

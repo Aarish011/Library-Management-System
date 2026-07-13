@@ -47,6 +47,11 @@ const paymentSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    lockerNumber: {
+      type: String,
+      default: null,
+      trim: true,
+    },
     paymentMethod: {
       type: String,
       enum: ['razorpay', 'pay_on_desk'],
