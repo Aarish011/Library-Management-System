@@ -3,6 +3,7 @@ const items = [
   ['#/students', 'Students'],
   ['#/alumni', 'Alumni'],
   ['#/seats', 'Seats'],
+  ['#/general-area', 'General Area'],
   ['#/subscriptions', 'Subscriptions'],
   ['#/renewals', 'Renewals Due'],
   ['#/payments', 'Payments'],

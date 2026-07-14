@@ -10,9 +10,11 @@ export default function Seat({
   femaleOnly = false,
   unavailableForPlan = false,
 }) {
+  const generalVisualOnly = Boolean(seat.generalVisualOnly);
   const isGeneralSlotSeat = Boolean(seat.slotAvailability);
   const slotSummary = getSlotSummary(seat.slotAvailability);
   const isDisabled =
+    generalVisualOnly ||
     (!isGeneralSlotSeat && seat.status === 'occupied') ||
     seat.status === 'maintenance' ||
     unavailableForPlan ||
@@ -22,7 +24,9 @@ export default function Seat({
     'relative flex flex-col items-center justify-center rounded-lg text-[10px] sm:text-[11px] font-semibold ' +
     'w-11 h-11 sm:w-14 sm:h-14 transition-all duration-150 select-none border-2';
 
-  const stateClasses = unavailableForPlan
+  const stateClasses = generalVisualOnly
+    ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed opacity-80'
+    : unavailableForPlan
     ? 'bg-slate-100 border-slate-200 text-slate-300 cursor-not-allowed opacity-60'
     : isSelected
     ? 'bg-amber-400 border-amber-500 text-amber-900 shadow-md shadow-amber-300/60 scale-110 animate-seat-pop'
@@ -48,7 +52,9 @@ export default function Seat({
       disabled={isDisabled}
       onClick={() => onSelect(seat)}
       aria-label={`Seat ${seat.seatNumber}, ${
-        unavailableForPlan
+        generalVisualOnly
+          ? 'general area visual only'
+          : unavailableForPlan
           ? 'not available for selected plan'
           : isSelected
             ? 'selected'
@@ -56,7 +62,9 @@ export default function Seat({
       }`}
       aria-pressed={isSelected}
       title={
-        unavailableForPlan
+        generalVisualOnly
+          ? 'General-area seats are not individually assigned. Choose a time slot below.'
+          : unavailableForPlan
           ? `Seat ${seat.seatNumber} - not available for selected plan`
           : isGeneralSlotSeat
             ? `Seat ${seat.seatNumber} - Morning: ${slotSummary.morningText}, Evening: ${slotSummary.eveningText}`

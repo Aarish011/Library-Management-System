@@ -19,7 +19,7 @@ const subscriptionSchema = new mongoose.Schema(
     },
     slot: {
       type: String,
-      enum: ['morning', 'evening', 'full_day'],
+      enum: ['morning', 'evening', 'wholeDay', 'full_day'],
       default: 'full_day',
     },
     startDate: {

@@ -15,7 +15,7 @@ export default function BookingSummary({
   onSlotChange,
 }) {
   const [lockerSelected, setLockerSelected] = useState(false);
-  const totalAmount = computePrice(selectedPlan, lockerSelected);
+  const totalAmount = computePrice(selectedPlan, lockerSelected, selectedSlot);
   const hasLockerRent = selectedPlan.plan === 'library_access';
 
   const startDate = new Date().toLocaleDateString('en-IN', {

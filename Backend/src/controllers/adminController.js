@@ -15,6 +15,7 @@ const {
   getEmailConfigStatus,
   verifyEmailTransport,
 } = require('../services/emailService');
+const { activateGeneralSlotBooking } = require('../services/generalAreaService');
 
 function startOfMonth(date = new Date()) {
   return new Date(date.getFullYear(), date.getMonth(), 1);
@@ -392,11 +393,38 @@ exports.getSeats = async (req, res) => {
 
 exports.updateSeat = async (req, res) => {
   try {
-    const seat = await Seat.findByIdAndUpdate(req.params.seatId, req.body, { new: true, runValidators: true });
+    const seat = await Seat.findById(req.params.seatId);
     if (!seat) return res.status(404).json({ success: false, message: 'Seat not found' });
+
+    const allowedFields = ['zone', 'status', 'row', 'column', 'isActive'];
+    const updates = {};
+    allowedFields.forEach((field) => {
+      if (req.body[field] !== undefined) updates[field] = req.body[field];
+    });
+
+    if (updates.status === 'maintenance') {
+      if (seat.status === 'booked' || seat.heldBy) {
+        return res.status(409).json({
+          success: false,
+          message:
+            'This seat is assigned or held. Release the seat before marking it for maintenance.',
+        });
+      }
+      updates.heldBy = null;
+      updates.holdExpiresAt = null;
+    }
+
+    if (seat.status === 'maintenance' && updates.status === 'available') {
+      updates.heldBy = null;
+      updates.holdExpiresAt = null;
+    }
+
+    Object.assign(seat, updates);
+    await seat.save();
+
     res.json({ success: true, data: seat });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(error.statusCode || 500).json({ success: false, message: error.message });
   }
 };
 
@@ -525,6 +553,15 @@ exports.confirmDeskPayment = async (req, res) => {
             actorId: req.user._id,
           }
         );
+    if (payment.generalSlotBooking) {
+      await activateGeneralSlotBooking(
+        payment.generalSlotBooking,
+        subscriptionData.subscription._id,
+        payment._id,
+        subscriptionData.subscription.startDate,
+        subscriptionData.subscription.endDate
+      );
+    }
     payment.status = 'paid';
     payment.subscription = subscriptionData.subscription._id;
     payment.verifiedBy = req.user._id;

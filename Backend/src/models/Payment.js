@@ -17,6 +17,11 @@ const paymentSchema = new mongoose.Schema(
       ref: 'Reservation',
       default: null,
     },
+    generalSlotBooking: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'GeneralSlotBooking',
+      default: null,
+    },
     plan: {
       type: String,
       enum: ['library_access', 'reserved_seat', 'monthly', 'quarterly', 'yearly'],
@@ -24,7 +29,7 @@ const paymentSchema = new mongoose.Schema(
     },
     slot: {
       type: String,
-      enum: ['morning', 'evening', 'full_day'],
+      enum: ['morning', 'evening', 'wholeDay', 'full_day'],
       default: 'full_day',
     },
     amount: {
@@ -105,6 +110,7 @@ const paymentSchema = new mongoose.Schema(
 paymentSchema.index({ user: 1 });
 paymentSchema.index({ status: 1 });
 paymentSchema.index({ reservation: 1 });
+paymentSchema.index({ generalSlotBooking: 1 });
 paymentSchema.index({ paymentMethod: 1 });
 paymentSchema.index({ referenceId: 1 });
 paymentSchema.index({ razorpayOrderId: 1 });

@@ -67,9 +67,10 @@ export default function PaymentPage() {
   const lockerDepositAlreadyPaid =
     lockerSelected && Boolean(activeSubscription?.lockerSelected);
   const totalAmount =
-    computePrice(plan, lockerSelected) -
+    computePrice(plan, lockerSelected, selectedSlot) -
     (lockerDepositAlreadyPaid ? LOCKER_DEPOSIT : 0);
   const hasMatchingSeatHold = useMemo(() => {
+    if (plan && !plan.reservesSeat) return true;
     if (!plan || !reservationHold?.seat || !reservationHold?.reservation) {
       return false;
     }
@@ -232,7 +233,7 @@ export default function PaymentPage() {
       return false;
     }
 
-    if (!hasMatchingSeatHold) {
+    if (plan.reservesSeat && !hasMatchingSeatHold) {
       setError('Select a seat for this package before making payment.');
       toast.error('Please select a seat first');
       return false;
@@ -461,7 +462,9 @@ export default function PaymentPage() {
                   </p>
                 <p className='text-sm text-slate-600'>
                   {plan.duration} days membership - seats{' '}
-                  {plan.allowedSeatRange?.[0]} to {plan.allowedSeatRange?.[1]}
+                  {plan.reservesSeat
+                    ? `${plan.allowedSeatRange?.[0]} to ${plan.allowedSeatRange?.[1]}`
+                    : 'general area'}
                   {plan.plan === 'library_access' && selectedSlot
                     ? ` - ${formatSlot(selectedSlot)}`
                     : ''}
@@ -799,6 +802,7 @@ function formatPlan(plan) {
 function formatSlot(slot) {
   if (slot === 'morning') return 'Morning (8:00 AM - 2:30 PM)';
   if (slot === 'evening') return 'Evening (3:00 PM - 8:30 PM)';
+  if (slot === 'wholeDay') return 'Whole Day';
   return 'Full day';
 }
 

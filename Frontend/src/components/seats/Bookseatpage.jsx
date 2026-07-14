@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import Seat from '../../components/seats/Seat';
 import SeatLegend from '../../components/seats/Seatlegend';
 import BookingSummary from '../../components/seats/Bookingsummary';
+import GeneralSlotAvailability from '../../components/seats/GeneralSlotAvailability';
 import { getSeatLayout, reserveSeat } from '../../api/seatApi';
 import {
   SEAT_BLOCKS,
@@ -188,7 +189,13 @@ export default function BookSeatPage() {
         map.set(String(seat.seatNumber), {
           ...seat,
           unavailableForPlan:
-            seatNumber < minimumSeat || seatNumber > maximumSeat,
+            selectedPlan.plan === 'library_access' ||
+            seatNumber < minimumSeat ||
+            seatNumber > maximumSeat,
+          generalVisualOnly:
+            selectedPlan.plan === 'library_access' &&
+            seatNumber >= minimumSeat &&
+            seatNumber <= maximumSeat,
         });
       }
     });
@@ -223,10 +230,17 @@ export default function BookSeatPage() {
     if (!seat) return;
 
     const seatNumber = Number(seat.seatNumber);
+    if (selectedPlan.plan === 'library_access') {
+      if (seatNumber >= 66 && seatNumber <= 75) {
+        toast('General-area seats are not individually assigned. Choose a time slot below.');
+        return;
+      }
+    }
+
     if (seat.unavailableForPlan) {
       toast.error(
         selectedPlan.plan === 'library_access'
-          ? 'The Rs. 1000 general slot plan allows seats 66 to 75 only'
+        ? 'General-area seats are not individually assigned. Choose a time slot below.'
           : 'The Rs. 1500 plan allows seats 1 to 65 only'
       );
       return;
@@ -278,6 +292,11 @@ export default function BookSeatPage() {
         toast.error(`Please wait ${seconds}s before trying again`)
       )
     ) {
+      return;
+    }
+
+    if (selectedPlan.plan === 'library_access') {
+      toast.error('Choose a general area time slot below');
       return;
     }
 
@@ -434,6 +453,20 @@ export default function BookSeatPage() {
                 seatMap={seatMap}
                 selectedSeatId={selectedSeatId}
                 onSelectSeat={handleSelectSeat}
+              />
+            )}
+            {selectedPlan.plan === 'library_access' && (
+              <GeneralSlotAvailability
+                selectedPlan={selectedPlan}
+                onChoose={(slot) => {
+                  setSelectedSlot(slot);
+                  navigate('/payments', {
+                    state: {
+                      selectedPlan,
+                      selectedSlot: slot,
+                    },
+                  });
+                }}
               />
             )}
           </section>

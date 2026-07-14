@@ -28,6 +28,7 @@ function buildSlotAvailability(reservations) {
 
 function getDisplayStatus(seat, slotAvailability) {
   if (seat.isActive === false) return 'disabled';
+  if (seat.status === 'maintenance') return 'maintenance';
   if (!slotAvailability) return seat.status;
 
   const values = Object.values(slotAvailability);

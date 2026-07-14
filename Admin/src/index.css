@@ -110,6 +110,11 @@ th, td { padding: 12px 14px; border-bottom: 1px solid #edf0f5; white-space: nowr
 .table-actions { display: flex; gap: 8px; }
 .danger-button { border: 1px solid #f3b8b2; background: white; color: #b42318; }
 .danger-button:hover { background: #fff1f0; }
+.status-pill { display: inline-flex; align-items: center; padding: 4px 8px; border-radius: 999px; font-size: 11px; font-weight: 800; text-transform: capitalize; }
+.status-available { background: #e8f7f1; color: #087a5b; }
+.status-booked { background: #fff0ee; color: #b42318; }
+.status-held { background: #fff4db; color: #946000; }
+.status-maintenance { background: #eef1f6; color: #344054; }
 .archive-success { margin: 0; padding: 10px 12px; border: 1px solid #b8e2d4; border-radius: 8px; background: #edf9f5; }
 .alumni-layout { position: relative; min-width: 0; }
 .student-identity { display: flex; align-items: center; gap: 10px; min-width: 0; }

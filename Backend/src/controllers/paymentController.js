@@ -13,6 +13,10 @@ const {
   activateSubscriptionForUser,
   renewSubscriptionForUser,
 } = require('../services/subscriptionService');
+const {
+  createPendingGeneralSlotBooking,
+  activateGeneralSlotBooking,
+} = require('../services/generalAreaService');
 
 const RENEWAL_WINDOW_MS = 2 * 24 * 60 * 60 * 1000;
 
@@ -124,7 +128,8 @@ async function getPaymentSelection(userId, body = {}) {
   const fees = calculatePlanFees(
     planConfig,
     lockerSelection.lockerSelected,
-    chargeLockerDeposit
+    chargeLockerDeposit,
+    slot
   );
 
   return {
@@ -210,6 +215,16 @@ exports.createRazorpayOrder = async (req, res) => {
       subscription: renewalSubscription?._id || null,
     });
 
+    if (planConfig.plan === 'library_access' && !renewalSubscription) {
+      const booking = await createPendingGeneralSlotBooking(
+        req.user._id,
+        slot,
+        payment._id
+      );
+      payment.generalSlotBooking = booking._id;
+      await payment.save();
+    }
+
     res.status(201).json({
       success: true,
       message: 'Razorpay order created',
@@ -225,6 +240,7 @@ exports.createRazorpayOrder = async (req, res) => {
         lockerNumber,
         lockerRent,
         lockerDeposit,
+        generalSlotBooking: payment.generalSlotBooking,
         user: {
           name: req.user.name,
           email: req.user.email,
@@ -331,6 +347,16 @@ exports.verifyRazorpayPayment = async (req, res) => {
           }
         );
 
+    if (payment.generalSlotBooking) {
+      await activateGeneralSlotBooking(
+        payment.generalSlotBooking,
+        subscriptionData.subscription._id,
+        payment._id,
+        subscriptionData.subscription.startDate,
+        subscriptionData.subscription.endDate
+      );
+    }
+
     payment.status = 'paid';
     payment.subscription = subscriptionData.subscription._id;
     payment.razorpayPaymentId = razorpay_payment_id;
@@ -393,6 +419,16 @@ exports.createDeskReference = async (req, res) => {
       reservation: reservation?._id || null,
       subscription: renewalSubscription?._id || null,
     });
+
+    if (planConfig.plan === 'library_access' && !renewalSubscription) {
+      const booking = await createPendingGeneralSlotBooking(
+        req.user._id,
+        slot,
+        payment._id
+      );
+      payment.generalSlotBooking = booking._id;
+      await payment.save();
+    }
 
     res.status(201).json({
       success: true,

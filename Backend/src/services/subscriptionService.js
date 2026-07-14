@@ -8,7 +8,12 @@ const AuditLog = require('../models/AuditLog');
 const LOCKER_DEPOSIT = 250;
 const LOCKER_RENT = 100;
 const TOTAL_LOCKERS = 36;
-const GENERAL_SEAT_SLOTS = ['morning', 'evening'];
+const GENERAL_SLOT_PRICES = {
+  morning: 1000,
+  evening: 1000,
+  wholeDay: 1200,
+};
+const GENERAL_SEAT_SLOTS = ['morning', 'evening', 'wholeDay'];
 const FULL_DAY_SLOT = 'full_day';
 
 const PLANS = [
@@ -17,8 +22,10 @@ const PLANS = [
     plan: 'library_access',
     name: 'Library Access',
     price: 1000,
+    slotPrices: GENERAL_SLOT_PRICES,
     duration: 30,
-    reservesSeat: true,
+    reservesSeat: false,
+    areaType: 'general',
     allowedSeatRange: [66, 75],
     lockerDeposit: LOCKER_DEPOSIT,
     lockerRent: LOCKER_RENT,
@@ -161,9 +168,16 @@ async function shouldChargeLockerDeposit(userId) {
   return !legacyPaidLocker;
 }
 
-function calculatePlanFees(planConfig, lockerSelected = false, chargeLockerDeposit = true) {
+function getSeatFeeForPlan(planConfig, slot = null) {
+  if (planConfig.plan === 'library_access') {
+    return planConfig.slotPrices?.[slot] || planConfig.price;
+  }
+  return planConfig.price;
+}
+
+function calculatePlanFees(planConfig, lockerSelected = false, chargeLockerDeposit = true, slot = null) {
   const wantsLocker = normalizeLockerSelected(lockerSelected);
-  const seatFee = planConfig.price;
+  const seatFee = getSeatFeeForPlan(planConfig, slot);
   const lockerRent = getLockerRentForPlan(planConfig, wantsLocker);
   const lockerDeposit =
     wantsLocker && chargeLockerDeposit ? planConfig.lockerDeposit || LOCKER_DEPOSIT : 0;
@@ -176,8 +190,8 @@ function calculatePlanFees(planConfig, lockerSelected = false, chargeLockerDepos
   };
 }
 
-function getPlanAmount(planConfig, lockerSelected = false, chargeLockerDeposit = true) {
-  return calculatePlanFees(planConfig, lockerSelected, chargeLockerDeposit).total;
+function getPlanAmount(planConfig, lockerSelected = false, chargeLockerDeposit = true, slot = null) {
+  return calculatePlanFees(planConfig, lockerSelected, chargeLockerDeposit, slot).total;
 }
 
 function buildSubscriptionPayload(
@@ -192,13 +206,19 @@ function buildSubscriptionPayload(
 ) {
   const endDate = new Date(startDate.getTime() + planConfig.duration * 24 * 60 * 60 * 1000);
   const wantsLocker = normalizeLockerSelected(lockerSelected);
-  const fees = calculatePlanFees(planConfig, wantsLocker, chargeLockerDeposit);
+  const normalizedSlot = normalizeSlot(planConfig, slot) || FULL_DAY_SLOT;
+  const fees = calculatePlanFees(
+    planConfig,
+    wantsLocker,
+    chargeLockerDeposit,
+    normalizedSlot
+  );
 
   return {
     user: userId,
     seat: planConfig.reservesSeat ? seatId : null,
     plan: planConfig.plan,
-    slot: normalizeSlot(planConfig, slot) || FULL_DAY_SLOT,
+    slot: normalizedSlot,
     startDate,
     endDate,
     status: 'active',
@@ -512,10 +532,12 @@ module.exports = {
   LOCKER_DEPOSIT,
   LOCKER_RENT,
   TOTAL_LOCKERS,
+  GENERAL_SLOT_PRICES,
   GENERAL_SEAT_SLOTS,
   FULL_DAY_SLOT,
   getPlan,
   getPlanAmount,
+  getSeatFeeForPlan,
   calculatePlanFees,
   normalizeSlot,
   normalizeLockerNumber,
