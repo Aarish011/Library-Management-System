@@ -16,6 +16,7 @@ import HomePage from '../pages/public/HomePage';
 import PlansPage from '../pages/public/PlansPage';
 import AboutPage from '../pages/public/AboutPage';
 import ContactPage from '../pages/public/ContactPage';
+import CareerPage from '../pages/public/CareerPage';
 
 // Student Pages
 import DashboardPage from '../pages/student/DashboardPage';
@@ -43,6 +44,7 @@ const AppRoutes = () => {
           <Route path='/plans' element={<PlansPage />} />
           <Route path='/about' element={<AboutPage />} />
           <Route path='/contact' element={<ContactPage />} />
+          <Route path='/career' element={<CareerPage />} />
         </Route>
 
         {/* Auth Routes */}

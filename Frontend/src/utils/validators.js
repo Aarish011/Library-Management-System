@@ -38,6 +38,14 @@ export const validateRegister = (data) => {
     errors.preparation = 'Please select what you are preparing for';
   }
 
+  if (!data.profilePicture) {
+    errors.profilePicture = 'Profile photo is required';
+  } else if (!data.profilePicture.type?.startsWith('image/')) {
+    errors.profilePicture = 'Please upload an image file';
+  } else if (data.profilePicture.size > 5 * 1024 * 1024) {
+    errors.profilePicture = 'Profile photo must be smaller than 5 MB';
+  }
+
   return errors;
 };
 

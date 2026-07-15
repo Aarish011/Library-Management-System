@@ -10,13 +10,14 @@ export function getAdminToken() {
 export async function apiRequest(path, options = {}) {
   const token = options.skipAuth ? null : getAdminToken();
   const { skipAuth, ...requestOptions } = options;
+  const isFormData = requestOptions.body instanceof FormData;
   let response;
 
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
       ...requestOptions,
       headers: {
-        'Content-Type': 'application/json',
+        ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(requestOptions.headers || {}),
       },

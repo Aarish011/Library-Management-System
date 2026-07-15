@@ -22,6 +22,7 @@ const PUBLIC_LINKS = [
   { label: 'Home', href: '/' },
   { label: 'Plans', href: '/plans' },
   { label: 'About', href: '/about' },
+  { label: 'Career', href: '/career' },
   { label: 'Contact', href: '/contact' },
 ];
 

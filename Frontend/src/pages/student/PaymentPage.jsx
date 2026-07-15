@@ -104,6 +104,14 @@ export default function PaymentPage() {
     reservationHold?.reservedUntil ||
     reservationHold?.reservation?.reservedUntil ||
     null;
+  const lockersSoldOut =
+    lockerSelected &&
+    !loadingLockers &&
+    lockers.length > 0 &&
+    lockers.every(
+      (locker) =>
+        locker.status === 'occupied' && !locker.assignedToCurrentUser
+    );
   const lockerSelectionMissing = lockerSelected && !selectedLockerNumber;
 
   const loadHistory = async () => {
@@ -249,6 +257,12 @@ export default function PaymentPage() {
       reservationHold.timeLeft === 0
     ) {
       setError('Your seat hold expired. Please select the seat again.');
+      return false;
+    }
+
+    if (lockersSoldOut) {
+      setError('All lockers are sold out. You can continue booking without a locker.');
+      toast.error('All lockers are sold out');
       return false;
     }
 
@@ -538,6 +552,24 @@ export default function PaymentPage() {
                     {loadingLockers ? (
                       <div className='rounded-lg bg-slate-50 px-3 py-4 text-center text-sm text-slate-500'>
                         Loading lockers...
+                      </div>
+                    ) : lockersSoldOut ? (
+                      <div className='rounded-lg border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900'>
+                        <p className='font-semibold'>All lockers are sold out</p>
+                        <p className='mt-1 text-amber-800'>
+                          You can still book your seat or general slot without a locker.
+                        </p>
+                        <button
+                          type='button'
+                          onClick={() => {
+                            setLockerSelected(false);
+                            setSelectedLockerNumber('');
+                            setError('');
+                          }}
+                          className='mt-3 rounded-lg bg-[#11182B] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1B2540]'
+                        >
+                          Continue without locker
+                        </button>
                       </div>
                     ) : (
                       <div className='grid grid-cols-6 sm:grid-cols-9 gap-2'>

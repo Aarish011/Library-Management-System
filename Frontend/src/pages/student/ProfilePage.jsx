@@ -5,28 +5,13 @@
 // false on the backend) — it gets its own separate change-password form.
 
 import { useEffect, useState, useCallback } from 'react';
-import { fetchProfile, updateProfile, changePassword, uploadProfilePicture } from '../../api/profileApi';
-import { useAuth } from '../../hooks/useAuth';
+import { fetchProfile, changePassword } from '../../api/profileApi';
 
-const PREPARATION_OPTIONS = [
-  'UPSC',
-  'JEE',
-  'GATE',
-  'NEET',
-  'CAT',
-  'Banking',
-  'SSC',
-  'Other',
-];
 export default function ProfilePage() {
-  const { setUser } = useAuth();
   const [profile, setProfile] = useState(null);
   const [form, setForm] = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
-  const [isEditing, setIsEditing] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [toast, setToast] = useState(null);
 
   useEffect(() => {
@@ -51,64 +36,6 @@ export default function ProfilePage() {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3500);
   }, []);
-
-  const handleFieldChange = (field, value) =>
-    setForm((prev) => ({ ...prev, [field]: value }));
-
-  const handleCancelEdit = () => {
-    setForm(toFormState(profile));
-    setIsEditing(false);
-  };
-
-  const handleAvatarUpload = async (file) => {
-    if (!file) return;
-
-    if (!file.type.startsWith('image/')) {
-      showToast('Please select an image file.', 'error');
-      return;
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      showToast('Profile picture must be smaller than 5 MB.', 'error');
-      return;
-    }
-
-    setIsUploadingAvatar(true);
-    try {
-      const updated = await uploadProfilePicture(file);
-      setProfile(updated);
-      setForm(toFormState(updated));
-      setUser(updated);
-      localStorage.setItem('user', JSON.stringify(updated));
-      showToast('Profile picture updated successfully.');
-    } catch (err) {
-      showToast(err.message || 'Could not upload profile picture.', 'error');
-    } finally {
-      setIsUploadingAvatar(false);
-    }
-  };
-
-  const handleSave = async () => {
-    setIsSaving(true);
-    const {
-      emailDisplay: _emailDisplay,
-      gender: _gender,
-      ...payload
-    } = form;
-    try {
-      const updated = await updateProfile(payload);
-      setProfile(updated);
-      setForm(toFormState(updated));
-      setUser(updated);
-      localStorage.setItem('user', JSON.stringify(updated));
-      showToast('Profile updated successfully.');
-      setIsEditing(false);
-    } catch (err) {
-      showToast(err.message || 'Could not update profile. Please try again.', 'error');
-    } finally {
-      setIsSaving(false);
-    }
-  };
 
   if (loading) return <ProfileSkeleton />;
 
@@ -165,21 +92,12 @@ export default function ProfilePage() {
 
         <ProfileHeaderCard
           profile={profile}
-          isEditing={isEditing}
-          isUploadingAvatar={isUploadingAvatar}
-          onAvatarUpload={handleAvatarUpload}
-          onEdit={() => setIsEditing(true)}
         />
 
         <div className='grid grid-cols-1 lg:grid-cols-3 gap-6'>
           <div className='lg:col-span-2 space-y-6'>
             <PersonalDetailsCard
               form={form}
-              isEditing={isEditing}
-              isSaving={isSaving}
-              onChange={handleFieldChange}
-              onSave={handleSave}
-              onCancel={handleCancelEdit}
             />
             <ChangePasswordCard showToast={showToast} />
           </div>
@@ -205,14 +123,12 @@ function toFormState(profile) {
 
 // ---------- Header card: big avatar + identity ----------
 
-function ProfileHeaderCard({ profile, isEditing, isUploadingAvatar, onAvatarUpload, onEdit }) {
+function ProfileHeaderCard({ profile }) {
   return (
     <div className='bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center gap-6'>
       <Avatar
         profilePicture={profile.profilePicture}
         name={profile.name}
-        isUploading={isUploadingAvatar}
-        onUpload={onAvatarUpload}
       />
 
       <div className='flex-1 min-w-0'>
@@ -231,20 +147,14 @@ function ProfileHeaderCard({ profile, isEditing, isUploadingAvatar, onAvatarUplo
         </p>
       </div>
 
-      {!isEditing && (
-        <button
-          onClick={onEdit}
-          className='self-start sm:self-center px-4 py-2.5 rounded-lg border border-slate-300 text-slate-700 text-[14px] font-medium hover:bg-slate-50 transition-colors flex items-center gap-2 shrink-0'
-        >
-          <EditIcon />
-          Edit profile
-        </button>
-      )}
+      <div className='self-start sm:self-center rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-[13px] font-medium text-amber-800'>
+        Admin managed
+      </div>
     </div>
   );
 }
 
-function Avatar({ profilePicture, name, isUploading, onUpload }) {
+function Avatar({ profilePicture, name }) {
   const initials = (name || 'S')
     .split(' ')
     .map((w) => w[0])
@@ -265,33 +175,7 @@ function Avatar({ profilePicture, name, isUploading, onUpload }) {
           {initials}
         </div>
       )}
-      <label
-        title='Change profile picture'
-        className='absolute bottom-0 right-0 h-9 w-9 rounded-full bg-[#11182B] text-[#F4B740] border-2 border-white flex items-center justify-center hover:bg-[#1B2540] transition-colors cursor-pointer'
-      >
-        {isUploading ? <Spinner /> : <CameraIcon />}
-        <input
-          type='file'
-          accept='image/*'
-          className='hidden'
-          disabled={isUploading}
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            if (file) onUpload(file);
-            event.target.value = '';
-          }}
-        />
-      </label>
     </div>
-  );
-}
-
-function CameraIcon() {
-  return (
-    <svg width='15' height='15' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2'>
-      <path d='M4 7h3l2-3h6l2 3h3a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z' strokeLinecap='round' strokeLinejoin='round' />
-      <circle cx='12' cy='13' r='3.5' />
-    </svg>
   );
 }
 
@@ -327,15 +211,10 @@ function StatusBadge({ isActive }) {
   );
 }
 
-// ---------- Personal details (editable) ----------
+// ---------- Personal details (admin-managed) ----------
 
 function PersonalDetailsCard({
   form,
-  isEditing,
-  isSaving,
-  onChange,
-  onSave,
-  onCancel,
 }) {
   return (
     <section className='bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-7'>
@@ -343,26 +222,18 @@ function PersonalDetailsCard({
         <h3 className='text-[15px] font-semibold text-slate-900'>
           Personal details
         </h3>
-        {isEditing && (
-          <span className='text-[12px] text-amber-600 font-medium'>
-            Editing
-          </span>
-        )}
+        <span className='text-[12px] text-amber-600 font-medium'>
+          Admin only
+        </span>
+      </div>
+
+      <div className='mb-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800'>
+        These details are locked after registration. Please contact the library admin for any correction.
       </div>
 
       <div className='grid grid-cols-1 sm:grid-cols-2 gap-5'>
         <Field label='Full name'>
-          {isEditing ? (
-            <input
-              type='text'
-              value={form.name}
-              onChange={(e) => onChange('name', e.target.value)}
-              minLength={2}
-              className='input'
-            />
-          ) : (
-            <ReadValue value={form.name} />
-          )}
+          <ReadValue value={form.name} />
         </Field>
 
         <Field
@@ -373,88 +244,20 @@ function PersonalDetailsCard({
         </Field>
 
         <Field label='Phone number'>
-          {isEditing ? (
-            <input
-              type='tel'
-              value={form.phone}
-              onChange={(e) =>
-                onChange(
-                  'phone',
-                  e.target.value.replace(/\D/g, '').slice(0, 10)
-                )
-              }
-              pattern='[0-9]{10}'
-              className='input'
-            />
-          ) : (
-            <ReadValue value={form.phone} />
-          )}
+          <ReadValue value={form.phone} />
         </Field>
 
         <Field
           label='Gender'
           hint='Only the library admin can change your gender'
         >
-          <ReadValue value={capitalize(form.gender)} muted={isEditing} />
+          <ReadValue value={capitalize(form.gender)} />
         </Field>
 
         <Field label='Preparing for' hint='Your exam category'>
-          {isEditing ? (
-            <select
-              value={form.preparation}
-              onChange={(e) => onChange('preparation', e.target.value)}
-              className='input'
-            >
-              {PREPARATION_OPTIONS.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <ReadValue value={form.preparation} />
-          )}
+          <ReadValue value={form.preparation} />
         </Field>
       </div>
-
-      <style>{`
-        .input {
-          width: 100%;
-          padding: 0.55rem 0.75rem;
-          border-radius: 0.5rem;
-          border: 1px solid #cbd5e1;
-          font-size: 13.5px;
-          color: #0f172a;
-          outline: none;
-          transition: border-color 0.15s;
-        }
-        .input:focus { border-color: #F4B740; box-shadow: 0 0 0 3px rgba(244,183,64,0.15); }
-      `}</style>
-
-      {isEditing && (
-        <div className='flex gap-3 mt-6 pt-5 border-t border-slate-100'>
-          <button
-            onClick={onCancel}
-            disabled={isSaving}
-            className='flex-1 sm:flex-none px-5 py-2.5 rounded-lg border border-slate-300 text-slate-700 text-[14px] font-medium hover:bg-slate-50 disabled:opacity-50'
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onSave}
-            disabled={isSaving}
-            className='flex-1 sm:flex-none px-5 py-2.5 rounded-lg bg-[#11182B] text-white text-[14px] font-medium hover:bg-[#1B2540] disabled:opacity-60 flex items-center justify-center gap-2'
-          >
-            {isSaving ? (
-              <>
-                <Spinner /> Saving...
-              </>
-            ) : (
-              'Save changes'
-            )}
-          </button>
-        </div>
-      )}
     </section>
   );
 }
@@ -650,25 +453,6 @@ function ReadValue({ value, muted }) {
     >
       {value || '—'}
     </p>
-  );
-}
-
-function EditIcon() {
-  return (
-    <svg
-      width='15'
-      height='15'
-      viewBox='0 0 24 24'
-      fill='none'
-      stroke='currentColor'
-      strokeWidth='2'
-    >
-      <path
-        d='M11 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z'
-        strokeLinecap='round'
-        strokeLinejoin='round'
-      />
-    </svg>
   );
 }
 

@@ -208,6 +208,51 @@ exports.updateStudent = async (req, res) => {
   }
 };
 
+exports.uploadStudentAvatar = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'Profile photo is required',
+      });
+    }
+
+    const student = await User.findOne({
+      _id: req.params.studentId,
+      role: 'student',
+      isArchived: { $ne: true },
+    });
+
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: 'Student not found',
+      });
+    }
+
+    const upload = await uploadBuffer(
+      req.file,
+      'library-management/profile-images'
+    );
+
+    student.profilePicture = upload.secure_url;
+    await student.save();
+
+    const updatedStudent = await User.findById(student._id).select('-password');
+
+    res.json({
+      success: true,
+      message: 'Student profile photo updated successfully',
+      data: updatedStudent,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
 exports.deleteStudent = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();

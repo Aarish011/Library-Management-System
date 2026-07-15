@@ -57,6 +57,12 @@ const Footer = () => {
               </li>
 
               <li>
+                <Link to='/career' className='block py-2 hover:text-[#F4B740] transition'>
+                  Career
+                </Link>
+              </li>
+
+              <li>
                 <Link to='/contact' className='block py-2 hover:text-[#F4B740] transition'>
                   Contact
                 </Link>

@@ -147,6 +147,7 @@ const notificationRoutes = require('./routes/notificationRoutes');
 const issueRoutes = require('./routes/issueRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const generalAreaRoutes = require('./routes/generalAreaRoutes');
+const careerRoutes = require('./routes/careerRoutes');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/seats', seatRoutes);
@@ -157,6 +158,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/issues', issueRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/general-area', generalAreaRoutes);
+app.use('/api/careers', careerRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

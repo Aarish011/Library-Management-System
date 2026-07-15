@@ -14,8 +14,10 @@ import AlumniPage from '../pages/AlumniPage';
 import RenewalsDuePage from '../pages/RenewalsDuePage';
 import IssuesPage from '../pages/IssuesPage';
 import GeneralAreaPage from '../pages/GeneralAreaPage';
+import CareerApplicationsPage from '../pages/CareerApplicationsPage';
+import AdmissionLeadsPage from '../pages/AdmissionLeadsPage';
 
-const pages = { '/dashboard': DashboardPage, '/students': StudentsPage, '/alumni': AlumniPage, '/seats': SeatsPage, '/general-area': GeneralAreaPage, '/subscriptions': SubscriptionsPage, '/renewals': RenewalsDuePage, '/payments': PaymentsPage, '/issues': IssuesPage, '/notifications': NotificationsPage, '/reports': ReportsPage, '/settings': SettingsPage };
+const pages = { '/dashboard': DashboardPage, '/students': StudentsPage, '/alumni': AlumniPage, '/admission-leads': AdmissionLeadsPage, '/seats': SeatsPage, '/general-area': GeneralAreaPage, '/subscriptions': SubscriptionsPage, '/renewals': RenewalsDuePage, '/payments': PaymentsPage, '/issues': IssuesPage, '/careers': CareerApplicationsPage, '/notifications': NotificationsPage, '/reports': ReportsPage, '/settings': SettingsPage };
 
 export default function AdminRoutes() {
   const [path, setPath] = useState(window.location.hash.replace('#', '') || '/dashboard');

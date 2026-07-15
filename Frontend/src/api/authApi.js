@@ -3,7 +3,12 @@ import axios from './axiosConfig';
 // Register new user
 export const register = async (userData) => {
   try {
-    const response = await axios.post('/auth/register', userData);
+    const response = await axios.post('/auth/register', userData, {
+      headers:
+        userData instanceof FormData
+          ? { 'Content-Type': 'multipart/form-data' }
+          : undefined,
+    });
     return response.data;
   } catch (error) {
     throw error.response?.data || { message: 'Registration failed' };

@@ -35,6 +35,7 @@ const Register = () => {
     confirmPassword: '',
     gender: '',
     preparation: '',
+    profilePicture: null,
   });
   const [errors, setErrors] = useState({});
 
@@ -65,6 +66,15 @@ const Register = () => {
     // Clear error for this field
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: '' }));
+    }
+  };
+
+  const handlePhotoChange = (event) => {
+    const file = event.target.files?.[0] || null;
+    setFormData((prev) => ({ ...prev, profilePicture: file }));
+    setSubmitError('');
+    if (errors.profilePicture) {
+      setErrors((prev) => ({ ...prev, profilePicture: '' }));
     }
   };
 
@@ -220,15 +230,17 @@ const Register = () => {
     setSubmitError('');
     registerCooldown.startCooldown();
     try {
-      const response = await register({
-        name: formData.name,
-        email: formData.email,
-        phone: formData.phone,
-        password: formData.password,
-        gender: formData.gender.toLowerCase(),
-        preparation: formData.preparation,
-        firebaseIdToken,
-      });
+      const payload = new FormData();
+      payload.append('name', formData.name);
+      payload.append('email', formData.email);
+      payload.append('phone', formData.phone);
+      payload.append('password', formData.password);
+      payload.append('gender', formData.gender.toLowerCase());
+      payload.append('preparation', formData.preparation);
+      payload.append('firebaseIdToken', firebaseIdToken);
+      payload.append('profilePicture', formData.profilePicture);
+
+      const response = await register(payload);
 
       if (response.success) {
         login(response.data.user, response.data.token);
@@ -258,6 +270,36 @@ const Register = () => {
               {submitError}
             </div>
           )}
+
+          {/* Profile Photo */}
+          <div>
+            <label className='block text-sm font-medium text-gray-700 mb-1'>
+              Profile Photo *
+            </label>
+            <div
+              className={`rounded-lg border px-4 py-3 ${
+                errors.profilePicture ? 'border-red-500' : 'border-gray-300'
+              }`}
+            >
+              <input
+                type='file'
+                accept='image/*'
+                onChange={handlePhotoChange}
+                className='w-full text-sm text-gray-700'
+              />
+              <p className='mt-2 text-xs text-gray-500'>
+                Required for identity verification. JPG/PNG under 5 MB.
+              </p>
+              {formData.profilePicture && (
+                <p className='mt-2 text-sm font-medium text-emerald-700'>
+                  Selected: {formData.profilePicture.name}
+                </p>
+              )}
+            </div>
+            {errors.profilePicture && (
+              <p className='text-red-500 text-sm mt-1'>{errors.profilePicture}</p>
+            )}
+          </div>
 
           {/* Name */}
           <div>

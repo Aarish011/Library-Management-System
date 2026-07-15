@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const adminController = require('../controllers/adminController');
 const issueController = require('../controllers/issueController');
+const admissionLeadController = require('../controllers/admissionLeadController');
 const { protect, adminAuth } = require('../middleware/auth');
 const imageUpload = require('../middleware/upload');
 
@@ -29,6 +30,13 @@ router.put(
   protect,
   adminAuth,
   adminController.updateStudent
+);
+router.post(
+  '/students/:studentId/avatar',
+  protect,
+  adminAuth,
+  imageUpload.single('profilePicture'),
+  adminController.uploadStudentAvatar
 );
 router.delete(
   '/students/:studentId',
@@ -110,6 +118,26 @@ router.put(
   protect,
   adminAuth,
   issueController.updateAdminIssue
+);
+
+// Admission lead management
+router.get(
+  '/admission-leads',
+  protect,
+  adminAuth,
+  admissionLeadController.getAdminLeads
+);
+router.post(
+  '/admission-leads',
+  protect,
+  adminAuth,
+  admissionLeadController.createAdminLead
+);
+router.put(
+  '/admission-leads/:leadId',
+  protect,
+  adminAuth,
+  admissionLeadController.updateAdminLead
 );
 
 module.exports = router;

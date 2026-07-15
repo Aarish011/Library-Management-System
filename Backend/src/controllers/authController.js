@@ -6,8 +6,6 @@ const crypto = require('crypto');
 const { sendPasswordResetEmail } = require('../services/emailService');
 const { verifyFirebaseIdToken } = require('../services/firebaseAdminService');
 
-const editableProfileFields = ['name', 'phone', 'preparation'];
-
 function buildArchivedEmail(user) {
   const email = String(user.email || '').trim().toLowerCase();
   if (email.startsWith(`archived-${user._id}-`)) return email;
@@ -50,6 +48,13 @@ exports.register = async (req, res) => {
       firebaseIdToken,
     } = req.body;
 
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'Profile photo is required',
+      });
+    }
+
     let decodedToken;
     try {
       decodedToken = await verifyFirebaseIdToken(firebaseIdToken);
@@ -77,10 +82,10 @@ exports.register = async (req, res) => {
       if (releasedArchivedUser) {
         console.log(`Released archived user email for registration: ${email}`);
       } else {
-      return res.status(400).json({
-        success: false,
-        message: 'Email already registered',
-      });
+        return res.status(400).json({
+          success: false,
+          message: 'Email already registered',
+        });
       }
     }
 
@@ -90,12 +95,17 @@ exports.register = async (req, res) => {
       if (releasedArchivedUser) {
         console.log(`Released archived user phone for registration: ${phone}`);
       } else {
-      return res.status(400).json({
-        success: false,
-        message: 'Phone number already registered',
-      });
+        return res.status(400).json({
+          success: false,
+          message: 'Phone number already registered',
+        });
       }
     }
+
+    const uploadResult = await uploadBuffer(
+      req.file,
+      'library-management/profile-images'
+    );
 
     const user = await User.create({
       name,
@@ -104,6 +114,7 @@ exports.register = async (req, res) => {
       password,
       gender,
       preparation,
+      profilePicture: uploadResult.secure_url,
       role: 'student',
     });
 
@@ -187,77 +198,20 @@ exports.getMe = async (req, res) => {
   }
 };
 
-// Update current user's editable profile fields
+// Student profile fields are admin-managed after registration.
 exports.updateMe = async (req, res) => {
-  try {
-    const updates = {};
-
-    editableProfileFields.forEach((field) => {
-      if (req.body[field] !== undefined) updates[field] = req.body[field];
-    });
-
-    const user = await User.findById(req.user._id);
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found',
-      });
-    }
-
-    Object.assign(user, updates);
-    await user.save();
-
-    res.json({
-      success: true,
-      message: 'Profile updated successfully',
-      data: user,
-    });
-  } catch (error) {
-    console.error('Update profile error:', error);
-
-    if (error.name === 'ValidationError') {
-      return res.status(400).json({
-        success: false,
-        message: Object.values(error.errors)[0]?.message || 'Invalid profile data',
-      });
-    }
-
-    res.status(500).json({
-      success: false,
-      message: 'Failed to update profile',
-    });
-  }
+  return res.status(403).json({
+    success: false,
+    message: 'Profile details can only be changed by the library admin.',
+  });
 };
 
 // Change current user's password
 exports.uploadAvatar = async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({
-        success: false,
-        message: 'Profile image is required',
-      });
-    }
-
-    const result = await uploadBuffer(req.file, 'library-management/profile-images');
-    const user = await User.findByIdAndUpdate(
-      req.user._id,
-      { profilePicture: result.secure_url },
-      { new: true, runValidators: true }
-    );
-
-    res.json({
-      success: true,
-      message: 'Profile picture updated successfully',
-      data: user,
-    });
-  } catch (error) {
-    console.error('Upload avatar error:', error);
-    res.status(error.statusCode || 500).json({
-      success: false,
-      message: error.message || 'Failed to upload profile picture',
-    });
-  }
+  return res.status(403).json({
+    success: false,
+    message: 'Profile photo can only be changed by the library admin.',
+  });
 };
 
 exports.changePassword = async (req, res) => {
