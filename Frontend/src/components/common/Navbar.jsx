@@ -31,6 +31,7 @@ const STUDENT_LINKS = [
   { label: 'Book Seat', href: '/book-seat', live: true },
   { label: 'Subscription', href: '/subscription' },
   { label: 'Payments', href: '/payments' },
+  { label: 'Career', href: '/career' },
   { label: 'Raise issue', href: '/support' },
 ];
 
